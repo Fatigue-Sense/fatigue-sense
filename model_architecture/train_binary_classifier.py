@@ -26,13 +26,14 @@ from model_architecture.models.binary_roi_classifier import build_binary_classif
 # Constants
 # ---------------------------------------------------------------------------
 
-EPOCHS = 40
+EPOCHS = 100
 BATCH_SIZE = 64
 LR = 1e-3
 DROPOUT = 0.2
 MIXUP_ALPHA = 0.4
 MIXUP_WARMUP_EPOCHS = 3
-EARLY_STOP_PATIENCE = 0  # 0 = disabled
+EARLY_STOP_PATIENCE = 10
+NUM_WORKERS = 4
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_TRAIN_ROOT = _REPO_ROOT / "data" / "binary" / "train"
@@ -297,7 +298,7 @@ def train(roi: str) -> None:
         root=root,
         class_to_label=class_to_label,
         batch_size=BATCH_SIZE,
-        num_workers=6,
+        num_workers=NUM_WORKERS,
         persistent_workers=True,
         **loader_opts,
     )
