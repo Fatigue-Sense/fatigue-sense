@@ -1,5 +1,9 @@
 """Datasets for FatigueSense training scripts."""
 
+from model_architecture.dataset.binary_classifier_dataset import (
+    BinaryClassifierDataset,
+    build_dataloaders,
+)
 from model_architecture.dataset.temporal_window_dataset import (
     DEFAULT_SEED,
     DEFAULT_VAL_FRACTION,
@@ -10,6 +14,8 @@ from model_architecture.dataset.temporal_window_dataset import (
 )
 
 __all__ = [
+    "BinaryClassifierDataset",
+    "build_dataloaders",
     "TemporalWindowDataset",
     "default_label_from_window",
     "DEFAULT_WINDOW_STEPS",

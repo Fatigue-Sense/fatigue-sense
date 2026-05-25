@@ -1,7 +1,8 @@
 """
-Eyes ROI Dataset
-Loads closed / open crops from dataset/eyes/.
-Label 0 = closed, Label 1 = open.
+Binary ROI classifier dataset (eyes or mouth).
+
+Loads class folders under a single root, e.g. ``train/eyes/closed/*.png``.
+Label mapping is passed in via ``class_to_label`` (typically closed=0, open=1).
 """
 
 from __future__ import annotations
@@ -11,19 +12,19 @@ from pathlib import Path
 
 import torch
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
-_EYES_INPUT_H = 64
-_EYES_INPUT_W = 64
+_ROI_INPUT_H = 64
+_ROI_INPUT_W = 64
 
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
-_IMAGENET_STD  = (0.229, 0.224, 0.225)
+_IMAGENET_STD = (0.229, 0.224, 0.225)
 
 _TRAIN_TRANSFORMS = transforms.Compose(
     [
         transforms.Grayscale(num_output_channels=3),
-        transforms.Resize((_EYES_INPUT_H, _EYES_INPUT_W)),
+        transforms.Resize((_ROI_INPUT_H, _ROI_INPUT_W)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(degrees=15),
         transforms.ColorJitter(brightness=0.3, contrast=0.3),
@@ -35,27 +36,28 @@ _TRAIN_TRANSFORMS = transforms.Compose(
 _VAL_TRANSFORMS = transforms.Compose(
     [
         transforms.Grayscale(num_output_channels=3),
-        transforms.Resize((_EYES_INPUT_H, _EYES_INPUT_W)),
+        transforms.Resize((_ROI_INPUT_H, _ROI_INPUT_W)),
+        transforms.ToTensor(),
+        transforms.Normalize(_IMAGENET_MEAN, _IMAGENET_STD),
+    ]
+)
+
+_MINORITY_TRANSFORMS = transforms.Compose(
+    [
+        transforms.Grayscale(num_output_channels=3),
+        transforms.Resize((_ROI_INPUT_H, _ROI_INPUT_W)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(degrees=20),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2),
+        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+        transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),
         transforms.ToTensor(),
         transforms.Normalize(_IMAGENET_MEAN, _IMAGENET_STD),
     ]
 )
 
 
-_MINORITY_TRANSFORMS = transforms.Compose([
-    transforms.Grayscale(num_output_channels=3),
-    transforms.Resize((_EYES_INPUT_H, _EYES_INPUT_W)),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(degrees=20),
-    transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2),
-    transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-    transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),
-    transforms.ToTensor(),
-    transforms.Normalize(_IMAGENET_MEAN, _IMAGENET_STD),
-])
-
-
-class EyesDataset(Dataset):
+class BinaryClassifierDataset(Dataset):
     def __init__(
         self,
         root: str | Path,
@@ -72,9 +74,13 @@ class EyesDataset(Dataset):
         root = Path(root)
         for class_name, label in class_to_label.items():
             class_dir = root / class_name
+            if not class_dir.is_dir():
+                raise FileNotFoundError(f"Missing class folder: {class_dir}")
             img_paths = []
-            for ext in ("*.jpg", "*.jpeg", "*.png"):
+            for ext in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
                 img_paths.extend(class_dir.glob(ext))
+            if not img_paths:
+                raise FileNotFoundError(f"No images in {class_dir}")
             for img_path in sorted(img_paths):
                 self.samples.append((img_path, label))
 
@@ -99,12 +105,13 @@ def build_dataloaders(
     num_workers: int = 4,
     pin_memory: bool = True,
     persistent_workers: bool = False,
-    sampler = None,
+    sampler=None,
     downsample_majority: bool = False,
 ) -> tuple[DataLoader, DataLoader]:
     import random
+
     root = Path(root)
-    all_samples = EyesDataset(root, class_to_label, transform=None).samples
+    all_samples = BinaryClassifierDataset(root, class_to_label, transform=None).samples
 
     if downsample_majority:
         label_to_indices: dict[int, list[int]] = defaultdict(list)
@@ -121,14 +128,13 @@ def build_dataloaders(
             balanced_indices.extend(sampled)
 
         all_samples = [all_samples[i] for i in balanced_indices]
-        
-    # --- Stratified split ---
+
     label_to_indices: dict[int, list[int]] = defaultdict(list)
     for i, (_, label) in enumerate(all_samples):
         label_to_indices[label].append(i)
 
     train_indices: list[int] = []
-    val_indices:   list[int] = []
+    val_indices: list[int] = []
 
     for label, idxs in label_to_indices.items():
         idxs_tensor = torch.tensor(idxs)[torch.randperm(len(idxs))].tolist()
@@ -136,18 +142,20 @@ def build_dataloaders(
         val_indices.extend(idxs_tensor[:n_val])
         train_indices.extend(idxs_tensor[n_val:])
 
-    train_dataset = EyesDataset(
-        root, class_to_label,
+    train_dataset = BinaryClassifierDataset(
+        root,
+        class_to_label,
         transform=_TRAIN_TRANSFORMS,
         minority_transform=_MINORITY_TRANSFORMS,
     )
-    val_dataset = EyesDataset(
-        root, class_to_label,
+    val_dataset = BinaryClassifierDataset(
+        root,
+        class_to_label,
         transform=_VAL_TRANSFORMS,
     )
 
     train_dataset.samples = [all_samples[i] for i in train_indices]
-    val_dataset.samples   = [all_samples[i] for i in val_indices]
+    val_dataset.samples = [all_samples[i] for i in val_indices]
 
     train_loader = DataLoader(
         train_dataset,
@@ -166,4 +174,4 @@ def build_dataloaders(
         pin_memory=pin_memory,
         persistent_workers=persistent_workers,
     )
-    return train_loader, val_loader, train_indices
+    return train_loader, val_loader

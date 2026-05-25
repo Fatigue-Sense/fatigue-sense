@@ -6,7 +6,8 @@ Stage 2 (epochs 11–25): unfreeze last 2 backbone blocks, differential LR,
                          backbone=1e-4 / head=1e-3, MixUp(alpha=0.4)
 
 Usage:
-    python scripts/train_binary_classifier.py --roi eyes
+    python -m model_architecture.train_binary_classifier --roi eyes
+    python -m model_architecture.train_binary_classifier --roi mouth
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import torch.nn as nn
 from sklearn.metrics import f1_score, precision_score, recall_score
 from tqdm import tqdm
 
-from model_architecture.dataset.eyes_dataset import build_dataloaders
+from model_architecture.dataset.binary_classifier_dataset import build_dataloaders
 from model_architecture.models.binary_roi_classifier import build_binary_classifier
 
 # ---------------------------------------------------------------------------
@@ -36,12 +37,23 @@ DROPOUT = 0.2
 MIXUP_ALPHA = 0.4
 EARLY_STOP_PATIENCE = 0  # 0 = disabled
 
+# Unzipped from FatigueSense/binary_classifier_dataset (see docs/training.md)
+_DEFAULT_TRAIN_ROOT = Path(r"C:\Users\jlord\Downloads\dataset_split\train")
+
 DATASET_ROOTS: dict[str, str] = {
-    "eyes": "training_data/data/train",
+    "eyes": str(_DEFAULT_TRAIN_ROOT / "eyes"),
+    "mouth": str(_DEFAULT_TRAIN_ROOT / "mouth"),
 }
 
 CLASS_LABELS: dict[str, dict[str, int]] = {
-    "eyes": {"Closed": 0, "Open": 1},
+    "eyes": {"closed": 0, "open": 1},
+    "mouth": {"closed": 0, "open": 1},
+}
+
+# Mouth crops are heavily imbalanced (mostly closed); downsample majority class.
+ROI_DATALOADER_OPTIONS: dict[str, dict] = {
+    "eyes": {"downsample_majority": False},
+    "mouth": {"downsample_majority": True},
 }
 
 CHECKPOINT_DIR = Path("runs/binary")
@@ -268,24 +280,42 @@ def _plot_training(
 # ---------------------------------------------------------------------------
 
 
-def train(roi: str) -> None:
+def _resolve_dataset_root(roi: str) -> Path:
     if roi not in DATASET_ROOTS:
         raise ValueError(
             f"No dataset registered for ROI '{roi}'. Add to DATASET_ROOTS."
         )
+    root = Path(DATASET_ROOTS[roi]).resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(
+            f"Dataset root for '{roi}' not found: {root}\n"
+            f"Update DATASET_ROOTS['{roi}'] or unzip dataset_split.zip under "
+            f"C:\\Users\\jlord\\Downloads\\dataset_split\\train\\{roi}\\{{closed,open}}\\"
+        )
+    return root
+
+
+def train(roi: str) -> None:
+    root = _resolve_dataset_root(roi)
+    class_to_label = CLASS_LABELS[roi]
+    loader_opts = ROI_DATALOADER_OPTIONS.get(roi, {})
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    print(f"Dataset: {root}")
+    if loader_opts.get("downsample_majority"):
+        print("  downsample_majority=True (balance classes)")
 
     torch.backends.cudnn.benchmark = True
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
     train_loader, val_loader = build_dataloaders(
-        root=DATASET_ROOTS[roi],
-        class_to_label=CLASS_LABELS[roi],
+        root=root,
+        class_to_label=class_to_label,
         batch_size=BATCH_SIZE,
         num_workers=6,
         persistent_workers=True,
+        **loader_opts,
     )
     print(f"Train: {len(train_loader.dataset)} | Val: {len(val_loader.dataset)}")
 

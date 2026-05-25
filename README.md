@@ -45,7 +45,7 @@ fatigue-sense/
 ```
 
 Training scripts expect extra data on disk or Hugging Face (not shipped in this
-release). **Eye/mouth ROI crops** ship as one zip on HF—see [docs/training.md](docs/training.md).
+release). **Eye/mouth ROI crops** ship as one zip on HF -see [docs/training.md](docs/training.md).
 Pretrained **model weights** auto-download from Hugging Face by default.
 
 ## Requirements
@@ -92,7 +92,7 @@ If you point paths at a **private** repo or mirror, set `HF_TOKEN` or run
 
 ## Configuration
 
-### 1. Checkpoint paths — `scripts/weights_path.py`
+### 1. Checkpoint paths  - `scripts/weights_path.py`
 
 Single place to configure all assets:
 
@@ -119,7 +119,7 @@ The `.task` bundle is **not** on Hugging Face. Either:
 
 Set `LANDMARKER_PATH` in `weights_path.py` if you store it elsewhere.
 
-### 3. Live demo tuning — `scripts/live_inference_local.py`
+### 3. Live demo tuning  - `scripts/live_inference_local.py`
 
 | Constant | Default | Purpose |
 |----------|---------|--------|
@@ -141,7 +141,7 @@ Metrics will be noisier but the focus score appears sooner (~35 s vs ~90 s cold 
 > **90 seconds** after you start the demo. The pipeline needs **~60 s** of frames
 > before the `FeatureAggregator` emits the first 1 Hz temporal feature, then **~30 s**
 > more (30 BiGRU steps at 1 Hz) before the temporal model has enough context to
-> score focus. This is expected—not a hang.
+> score focus. This is expected -not a hang.
 
 Run from the **repository root** so imports and `face_landmarker.task` resolve:
 
@@ -161,7 +161,7 @@ python scripts/live_inference_local.py
 
 ### Outputs
 
-- `runs/live_inference_steps.csv` — per-second feature log (overwritten each run)
+- `runs/live_inference_steps.csv`  - per-second feature log (overwritten each run)
 
 ### Troubleshooting
 
@@ -179,7 +179,7 @@ See **[docs/training.md](docs/training.md)** for step-by-step commands and HF li
 
 **Binary classifier training data (eyes + mouth):** download and unzip
 [`FatigueSense/binary_classifier_dataset`](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset)
-(`dataset_split.zip`—one archive, not per-PNG uploads). After unzip you should have:
+(`dataset_split.zip` -one archive, not per-PNG uploads). After unzip you should have:
 
 ```
 C:\Users\jlord\Downloads\dataset_split\
