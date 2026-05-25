@@ -27,14 +27,9 @@ Model checkpoint paths live in ``scripts/weights_path.py``.
 from __future__ import annotations
 
 import csv
-import sys
 import time
 from collections import deque
 from pathlib import Path
-
-_SCRIPTS_DIR = Path(__file__).resolve().parent
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import cv2
 import mediapipe as mp
@@ -71,7 +66,7 @@ from fatigue_pipeline.region_cropper import RegionCropper
 from model_architecture.dataset.temporal_window_dataset import DEFAULT_WINDOW_STEPS
 from model_architecture.models.bigru_temporal import build_temporal_model
 from model_architecture.utils.normalization import load_normalization
-from weights_path import (
+from scripts.weights_path import (
     EYE_CKPT,
     LANDMARKER_PATH,
     MOUTH_CKPT,

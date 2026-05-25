@@ -1,4 +1,4 @@
-# FatigueSense — Pipeline Reproducibility
+# FatigueSense
 
 Official release package for the FatigueSense vision pipeline: per-frame face ROI
 extraction, eye/mouth classification, upper-body pose, 1 Hz feature aggregation,
@@ -52,35 +52,41 @@ Hugging Face by default.
 - Webcam (for the live demo)
 - Optional: NVIDIA GPU + CUDA for reasonable FPS
 
-### Install dependencies
+### Install dependencies (conda)
 
 From the repo root:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-pip install mediapipe opencv-python numpy pandas pyarrow huggingface_hub ultralytics scikit-learn tqdm pyyaml python-dotenv
+conda create -n fatigue-sense python=3.11 -y
+conda activate fatigue-sense
 ```
 
-Use the CPU-only PyTorch index if you do not have CUDA.
-
-### Hugging Face authentication
-
-Weights default to `hf://FatigueSense/...` repos. Log in once:
+**GPU (CUDA 12.4):**
 
 ```bash
-pip install huggingface_hub
-hf auth login
+conda install pytorch torchvision pytorch-cuda=12.4 -c pytorch -c nvidia -y
+pip install -r requirements.txt
 ```
 
-Or set a token in the environment:
+**CPU only:** install PyTorch without CUDA, then the same `pip` line:
 
 ```bash
-export HF_TOKEN=hf_xxxxxxxx   # Windows: set HF_TOKEN=...
+conda install pytorch torchvision cpuonly -c pytorch -y
+pip install -r requirements.txt
 ```
 
-If a repo is private, your account needs read access to the **FatigueSense** org.
+`requirements.txt` pins the rest of the stack (`mediapipe`, `opencv-python`,
+`huggingface_hub`, `ultralytics`, etc.).
+
+### Hugging Face assets (no login required)
+
+Published model weights and datasets under the **FatigueSense** org are **public**.
+Checkpoints use `hf://FatigueSense/...` specs in `scripts/weights_path.py`; the first
+run downloads via `huggingface_hub` (included in `requirements.txt`). You do **not**
+need `hf auth login` or `HF_TOKEN` for the defaults.
+
+If you point paths at a **private** repo or mirror, set `HF_TOKEN` or run
+`hf auth login` for that account.
 
 ## Configuration
 
@@ -129,6 +135,12 @@ Metrics will be noisier but the focus score appears sooner (~35 s vs ~90 s cold 
 
 ## Test the full pipeline (recommended)
 
+> **Warm-up (~90 s):** With default settings, the focus score stays `--` for about
+> **90 seconds** after you start the demo. The pipeline needs **~60 s** of frames
+> before the `FeatureAggregator` emits the first 1 Hz temporal feature, then **~30 s**
+> more (30 BiGRU steps at 1 Hz) before the temporal model has enough context to
+> score focus. This is expected—not a hang.
+
 Run from the **repository root** so imports and `face_landmarker.task` resolve:
 
 ```bash
@@ -142,7 +154,7 @@ python scripts/live_inference_local.py
 2. A preview window opens with:
    - Left HUD: raw CNN probabilities + 17 aggregated features
    - Right HUD: focus score, blink/yawn counters, FPS
-3. First ~90 s (with 60 s sub-window): focus may show `--` until buffers fill.
+3. For ~90 s, focus shows `--` while buffers fill (see warm-up note above).
 4. Press **Q** or **Esc** to quit.
 
 ### Outputs
@@ -154,7 +166,7 @@ python scripts/live_inference_local.py
 | Issue | Fix |
 |-------|-----|
 | `FileNotFoundError: face_landmarker.task` | Download landmarker (above) or fix `LANDMARKER_PATH` |
-| HF 401 / 403 | Run `hf auth login` or set `HF_TOKEN` |
+| HF 401 / 403 | Default repos are public; check path/URL. For private mirrors, use `HF_TOKEN` |
 | Focus stays `--` | Wait for cold start, or lower `DEMO_SUB_WINDOW_S` |
 | CUDA OOM | Set `DEVICE = "cpu"` in `live_inference_local.py` |
 | No camera | Change `WEBCAM_INDEX` (try `1`, `2`, …) |
