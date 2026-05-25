@@ -179,17 +179,17 @@ See **[docs/training.md](docs/training.md)** for step-by-step commands and HF li
 
 **Binary classifier training data (eyes + mouth):** download and unzip
 [`FatigueSense/binary_classifier_dataset`](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset)
-(`dataset_split.zip` -one archive, not per-PNG uploads). After unzip you should have:
+(`dataset_split.zip` - one archive, not per-PNG uploads). Unzip into `data/binary/`
+(see [docs/training.md](docs/training.md)) so you have:
 
 ```
-C:\Users\jlord\Downloads\dataset_split\
-├── train\eyes\{closed,open}\
-├── train\mouth\{closed,open}\
-└── test\...
+data/binary/
+├── train/eyes/{closed,open}/
+├── train/mouth/{closed,open}/
+└── test/...
 ```
 
-Then set `DATASET_ROOTS` in `model_architecture/train_binary_classifier.py` to
-`...\dataset_split\train\eyes` and `...\train\mouth` (see training doc). Pose and
+Training reads `data/binary/train/` by default. Pose and
 temporal datasets are separate HF repos under the same org.
 
 ## Programmatic use

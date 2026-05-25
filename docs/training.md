@@ -36,8 +36,9 @@ from pathlib import Path
 
 from huggingface_hub import hf_hub_download
 
-# Example destination (adjust if needed)
-DATASET_ROOT = Path(r"C:\Users\jlord\Downloads\dataset_split")
+# From repository root
+REPO_ROOT = Path(__file__).resolve().parents[1]  # adjust if running elsewhere
+DATA_DIR = REPO_ROOT / "data" / "binary"
 
 zip_path = hf_hub_download(
     repo_id="FatigueSense/binary_classifier_dataset",
@@ -45,50 +46,38 @@ zip_path = hf_hub_download(
     repo_type="dataset",
 )
 
-DATASET_ROOT.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(zip_path, "r") as zf:
-    zf.extractall(DATASET_ROOT)
+    zf.extractall(DATA_DIR)
 ```
 
 If the archive has an extra top-level `dataset_split/` folder inside the zip, move
-`train/` and `test/` up one level so they sit directly under `DATASET_ROOT`.
+`train/` and `test/` into `data/binary/`.
 
 Or download `dataset_split.zip` from the [dataset files tab](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset/tree/main) and extract it yourself.
 
 #### Expected layout after unzip
 
 ```
-C:\Users\jlord\Downloads\dataset_split\
-├── train\
-│   ├── eyes\
-│   │   ├── closed\   (*.png, …)
-│   │   └── open\
-│   └── mouth\
-│       ├── closed\
-│       └── open\
-└── test\
-    ├── eyes\
-    │   ├── closed\
-    │   └── open\
-    └── mouth\
-        ├── closed\
-        └── open\
+data/binary/
+├── train/
+│   ├── eyes/
+│   │   ├── closed/   (*.png, …)
+│   │   └── open/
+│   └── mouth/
+│       ├── closed/
+│       └── open/
+└── test/
+    ├── eyes/
+    │   ├── closed/
+    │   └── open/
+    └── mouth/
+        ├── closed/
+        └── open/
 ```
 
-Point `DATASET_ROOTS` in `train_binary_classifier.py` at the **train** split, e.g.:
-
-```python
-DATASET_ROOTS = {
-    "eyes":  r"C:\Users\jlord\Downloads\dataset_split\train\eyes",
-    "mouth": r"C:\Users\jlord\Downloads\dataset_split\train\mouth",
-}
-CLASS_LABELS = {
-    "eyes":  {"closed": 0, "open": 1},
-    "mouth": {"closed": 0, "open": 1},
-}
-```
-
-Use lowercase folder names (`closed`, `open`) to match the archive.
+`train_binary_classifier.py` defaults to `data/binary/train/{eyes,mouth}` (lowercase
+`closed` / `open` class folders). Override `DATASET_ROOTS` only if you store crops elsewhere.
 
 ## 1. Binary ROI classifiers (eyes and mouth)
 

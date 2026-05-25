@@ -1,9 +1,8 @@
 """
 Binary ROI Classifier — Training Script
 
-Stage 1 (epochs 1–10):  frozen backbone, head only, LR=1e-3
-Stage 2 (epochs 11–25): unfreeze last 2 backbone blocks, differential LR,
-                         backbone=1e-4 / head=1e-3, MixUp(alpha=0.4)
+Loads MobileNetV3-Small ImageNet weights, then fine-tunes the full network
+(backbone + head) end-to-end. MixUp (alpha=0.4) activates after a short warmup.
 
 Usage:
     python -m model_architecture.train_binary_classifier --roi eyes
@@ -27,18 +26,16 @@ from model_architecture.models.binary_roi_classifier import build_binary_classif
 # Constants
 # ---------------------------------------------------------------------------
 
-STAGE_1_EPOCHS = 10
-STAGE_2_EPOCHS = 30
+EPOCHS = 40
 BATCH_SIZE = 64
-STAGE_1_LR = 1e-3
-STAGE_2_HEAD_LR = 1e-3
-STAGE_2_BACKBONE_LR = 1e-5
+LR = 1e-3
 DROPOUT = 0.2
 MIXUP_ALPHA = 0.4
+MIXUP_WARMUP_EPOCHS = 3
 EARLY_STOP_PATIENCE = 0  # 0 = disabled
 
-# Unzipped from FatigueSense/binary_classifier_dataset (see docs/training.md)
-_DEFAULT_TRAIN_ROOT = Path(r"C:\Users\jlord\Downloads\dataset_split\train")
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_TRAIN_ROOT = _REPO_ROOT / "data" / "binary" / "train"
 
 DATASET_ROOTS: dict[str, str] = {
     "eyes": str(_DEFAULT_TRAIN_ROOT / "eyes"),
@@ -128,14 +125,11 @@ def evaluate(
 
 
 # ---------------------------------------------------------------------------
-# Training stages
+# Training loop
 # ---------------------------------------------------------------------------
 
 
-MIXUP_WARMUP_EPOCHS = 3
-
-
-def run_stage(
+def run_training(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
@@ -232,7 +226,6 @@ def _plot_training(
     train_losses: list[float],
     val_losses: list[float],
     val_f1s: list[float],
-    stage_boundary: int,
     save_path: Path,
 ) -> None:
     import matplotlib.pyplot as plt
@@ -242,15 +235,6 @@ def _plot_training(
 
     epochs = range(1, len(train_losses) + 1)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-
-    for ax in (ax1, ax2):
-        ax.axvline(
-            stage_boundary + 0.5,
-            color="#aaa",
-            linestyle="--",
-            linewidth=1,
-            label="Stage 2 start",
-        )
 
     ax1.plot(epochs, train_losses, label="Train loss")
     ax1.plot(epochs, val_losses, label="Val loss")
@@ -289,8 +273,8 @@ def _resolve_dataset_root(roi: str) -> Path:
     if not root.is_dir():
         raise FileNotFoundError(
             f"Dataset root for '{roi}' not found: {root}\n"
-            f"Update DATASET_ROOTS['{roi}'] or unzip dataset_split.zip under "
-            f"C:\\Users\\jlord\\Downloads\\dataset_split\\train\\{roi}\\{{closed,open}}\\"
+            f"Update DATASET_ROOTS['{roi}'] or place crops under "
+            f"data/binary/train/{roi}/{{closed,open}}/"
         )
     return root
 
@@ -320,7 +304,7 @@ def train(roi: str) -> None:
     print(f"Train: {len(train_loader.dataset)} | Val: {len(val_loader.dataset)}")
 
     model = build_binary_classifier(
-        pretrained=True, freeze_backbone=True, dropout=DROPOUT
+        pretrained=True, freeze_backbone=False, dropout=DROPOUT
     ).to(device)
     criterion = nn.CrossEntropyLoss()
 
@@ -328,44 +312,17 @@ def train(roi: str) -> None:
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_dir / "best.pt"
 
-    # Stage 1 — frozen backbone
-    print("\n--- Stage 1: frozen backbone ---")
-    optimizer = torch.optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=STAGE_1_LR,
-    )
-    _, s1_train_losses, s1_val_losses, s1_val_f1s = run_stage(
+    print("\n--- Fine-tuning full network (MobileNetV3-Small pretrained) ---")
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    _, train_losses, val_losses, val_f1s = run_training(
         model,
         optimizer,
         criterion,
         train_loader,
         val_loader,
         device,
-        epochs=STAGE_1_EPOCHS,
+        epochs=EPOCHS,
         start_epoch=1,
-        use_mixup=False,
-        checkpoint_path=checkpoint_path,
-        scaler=scaler,
-    )
-
-    # Stage 2 — partial unfreeze + differential LR
-    print("\n--- Stage 2: unfreeze last 2 blocks ---")
-    model.freeze_backbone(toggle=False, last_n_blocks=2)
-    optimizer = torch.optim.Adam(
-        [
-            {"params": model.backbone.parameters(), "lr": STAGE_2_BACKBONE_LR},
-            {"params": model.head.parameters(), "lr": STAGE_2_HEAD_LR},
-        ]
-    )
-    _, s2_train_losses, s2_val_losses, s2_val_f1s = run_stage(
-        model,
-        optimizer,
-        criterion,
-        train_loader,
-        val_loader,
-        device,
-        epochs=STAGE_2_EPOCHS,
-        start_epoch=STAGE_1_EPOCHS + 1,
         use_mixup=True,
         checkpoint_path=checkpoint_path,
         scaler=scaler,
@@ -374,10 +331,9 @@ def train(roi: str) -> None:
     print(f"\nBest checkpoint saved to {checkpoint_path}")
 
     _plot_training(
-        s1_train_losses + s2_train_losses,
-        s1_val_losses + s2_val_losses,
-        s1_val_f1s + s2_val_f1s,
-        stage_boundary=len(s1_train_losses),
+        train_losses,
+        val_losses,
+        val_f1s,
         save_path=checkpoint_dir / "training_curves.png",
     )
 
