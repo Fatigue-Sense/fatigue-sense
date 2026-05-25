@@ -1,0 +1,37 @@
+# Files
+*.zip
+*.mp4
+*.mp4
+*.pt
+!runs/**/*.pt
+!runs/*.pt
+labels.txt
+*.png
+
+# Folders
+/dataset_*
+/MRL_eye_dataset*
+/open_closed_eyes_dataset*
+/MF_Dataset_extracted*
+/MF_Dataset_cropped*
+/diagrams*
+/data
+/*dataset*
+/split_data*
+__pycache__
+videos
+raw_data
+vid_*
+/.claude
+/training_data
+
+# Environment variables
+fatigue_sense.conf
+.env
+
+# Jupyter Notebook
+PERSONAL.ipynb
+fatigue-sense
+
+# Backend - separate repo
+/backend
