@@ -1,1 +1,0 @@
-timestamp_s,step_idx,valid,perclos,blink_rate_bpm,mean_blink_duration,eye_closure_variance,yawn_rate_per_min,mean_yawn_duration,mouth_open_ratio,mean_p_eye,mean_p_mouth,head_pitch,head_roll,shoulder_tilt,head_size_ratio,head_motion_energy,head_drift_y,posture_drift,kpt_visibility,blink_total,yawn_total,score_raw,score_ema

@@ -3,12 +3,11 @@
 *.mp4
 *.mp4
 *.pt
-!runs/**/*.pt
-!runs/*.pt
 labels.txt
 *.png
 
 # Folders
+/runs/
 /dataset_*
 /MRL_eye_dataset*
 /open_closed_eyes_dataset*
