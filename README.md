@@ -39,12 +39,14 @@ fatigue-sense/
 ├── scripts/
 │   ├── weights_path.py       # All checkpoint paths (edit here)
 │   └── live_inference_local.py   # End-to-end webcam demo
+├── docs/
+│   └── training.md           # HF datasets, train commands, step order
 └── runs/                     # Created at runtime (logs, local training outputs)
 ```
 
-Training scripts expect extra data under `data/`, `videos/`, or `training_data/`
-(not shipped in this minimal release). Pretrained weights are pulled from
-Hugging Face by default.
+Training scripts expect extra data on disk or Hugging Face (not shipped in this
+release). **Eye/mouth ROI crops** ship as one zip on HF—see [docs/training.md](docs/training.md).
+Pretrained **model weights** auto-download from Hugging Face by default.
 
 ## Requirements
 
@@ -173,55 +175,22 @@ python scripts/live_inference_local.py
 
 ## Reproduce training (optional)
 
-This release includes training entry points; **datasets are hosted separately**
-on Hugging Face (see the main FatigueSense development repo for extraction scripts).
+See **[docs/training.md](docs/training.md)** for step-by-step commands and HF links.
 
-### Phase B — Binary eye/mouth classifiers
+**Binary classifier training data (eyes + mouth):** download and unzip
+[`FatigueSense/binary_classifier_dataset`](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset)
+(`dataset_split.zip`—one archive, not per-PNG uploads). After unzip you should have:
 
-```bash
-python -m model_architecture.train_binary_classifier --roi eyes
+```
+C:\Users\jlord\Downloads\dataset_split\
+├── train\eyes\{closed,open}\
+├── train\mouth\{closed,open}\
+└── test\...
 ```
 
-Configure `DATASET_ROOTS` in `train_binary_classifier.py` (default
-`training_data/data/train`). You need a folder-per-class layout or your own
-public dataset preparation.
-
-Published weights: `FatigueSense/eye_classifier`, `FatigueSense/mouth_classifier`.
-
-### Pose — YOLO11n upper-body (5 keypoints)
-
-```bash
-# Requires data/pose/ (YOLO images + labels + dataset.yaml)
-python -m model_architecture.train_yolo_pose
-```
-
-Dataset: [FatigueSense-pose](https://huggingface.co/datasets/Jlords32/FatigueSense-pose)
-(snapshot download into `data/pose/`).
-
-Published weights: `FatigueSense/pose_model`.
-
-### Phase C — BiGRU temporal model
-
-```bash
-# Requires data/temporal/features/*.parquet (one file per video)
-python -m model_architecture.train_temporal_model
-```
-
-Dataset: [FatigueSense-temporal](https://huggingface.co/datasets/Jlords32/FatigueSense-temporal)
-(download `features/` into `data/temporal/features/`).
-
-Outputs: `runs/temporal/best.pt`, `runs/temporal/normalization.json`.
-
-Published weights: `FatigueSense/temporal_model`.
-
-### Download HF datasets (example)
-
-```python
-from huggingface_hub import snapshot_download
-
-snapshot_download("Jlords32/FatigueSense-temporal", repo_type="dataset", local_dir="data/temporal_hf")
-# Copy or symlink features/ → data/temporal/features/
-```
+Then set `DATASET_ROOTS` in `model_architecture/train_binary_classifier.py` to
+`...\dataset_split\train\eyes` and `...\train\mouth` (see training doc). Pose and
+temporal datasets are separate HF repos under the same org.
 
 ## Programmatic use
 
