@@ -11,6 +11,8 @@ Checkpointing:
   * Ultralytics writes ``last.pt`` (and ``best.pt``) every epoch.
   * ``SAVE_PERIOD`` additionally snapshots ``epoch<N>.pt`` every N epochs
     so an OOM / power loss mid-run can be rolled back to a named epoch.
+  * After training, exports ``training_history.csv`` and ``training_curves.png``
+    (train/val loss per epoch) from Ultralytics ``results.csv``.
 
 Resume an interrupted run::
 
@@ -32,6 +34,8 @@ import argparse
 import glob
 import shutil
 from pathlib import Path
+
+import pandas as pd
 
 # ---- knobs ----
 DATA_YAML = Path("data/pose/dataset.yaml")
@@ -99,6 +103,84 @@ def _find_last_checkpoint() -> Path | None:
     return Path(max(matches, key=lambda p: Path(p).stat().st_mtime))
 
 
+def _parse_ultralytics_results(save_dir: Path) -> pd.DataFrame | None:
+    """Build per-epoch train/val loss table from Ultralytics ``results.csv``."""
+    results_csv = save_dir / "results.csv"
+    if not results_csv.is_file():
+        return None
+
+    df = pd.read_csv(results_csv)
+    df.columns = [str(c).strip() for c in df.columns]
+    if "epoch" not in df.columns:
+        return None
+
+    history = pd.DataFrame({"epoch": df["epoch"]})
+
+    if "train/loss" in df.columns and "val/loss" in df.columns:
+        history["train_loss"] = df["train/loss"]
+        history["val_loss"] = df["val/loss"]
+    else:
+        train_cols = [
+            c for c in df.columns if c.startswith("train/") and "loss" in c.lower()
+        ]
+        val_cols = [
+            c for c in df.columns if c.startswith("val/") and "loss" in c.lower()
+        ]
+        if not train_cols or not val_cols:
+            return None
+        history["train_loss"] = df[train_cols].sum(axis=1)
+        history["val_loss"] = df[val_cols].sum(axis=1)
+        for col in train_cols + val_cols:
+            history[col.replace("/", "_")] = df[col]
+
+    return history
+
+
+def _plot_loss_curves(
+    history: pd.DataFrame,
+    save_path: Path,
+    *,
+    best_epoch: int,
+) -> None:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    sns.set_theme(style="white", palette="Blues_r")
+
+    epochs = history["epoch"]
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(epochs, history["train_loss"], label="Train loss")
+    ax.plot(epochs, history["val_loss"], label="Val loss")
+    if best_epoch > 0:
+        ax.axvline(best_epoch, color="gray", ls="--", lw=1, label=f"Best epoch {best_epoch}")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.set_title("Pose model loss (YOLO)")
+    ax.legend()
+    sns.despine(ax=ax)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Loss curves saved to {save_path}")
+
+
+def _export_training_artifacts(save_dir: Path) -> None:
+    """Write training_history.csv + training_curves.png under the run directory."""
+    history = _parse_ultralytics_results(save_dir)
+    if history is None or history.empty:
+        print(f"WARNING: could not parse training history from {save_dir / 'results.csv'}")
+        return
+
+    history_path = save_dir / "training_history.csv"
+    curves_path = save_dir / "training_curves.png"
+    history.to_csv(history_path, index=False)
+
+    best_idx = history["val_loss"].astype(float).idxmin()
+    best_epoch = int(history.loc[best_idx, "epoch"])
+    _plot_loss_curves(history, curves_path, best_epoch=best_epoch)
+    print(f"Training history saved to {history_path}")
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument(
@@ -150,10 +232,13 @@ def main(argv: list[str] | None = None) -> None:
             **AUG,
         )
 
+    save_dir = Path(results.save_dir)
+    _export_training_artifacts(save_dir)
+
     metrics = model.val(data=str(DATA_YAML), device=DEVICE)
     print(f"Validation metrics:\n{metrics}")
 
-    best = Path(results.save_dir) / "weights" / "best.pt"
+    best = save_dir / "weights" / "best.pt"
     if best.exists():
         FINAL_WEIGHTS_DEST.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(best, FINAL_WEIGHTS_DEST)

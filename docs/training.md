@@ -112,6 +112,15 @@ python -m model_architecture.train_yolo_pose
 Download [pose_dataset](https://huggingface.co/datasets/FatigueSense/pose_dataset)
 into `data/pose/`. Published weights: `FatigueSense/pose_model`.
 
+Per-run outputs under `runs/pose/<run_name>/` (default run name `yolo11n_pose_upper5`):
+
+- `weights/best.pt`, `weights/last.pt` - Ultralytics checkpoints
+- `results.csv` - raw epoch metrics from Ultralytics
+- `training_history.csv` - train/val loss per epoch (exported after training)
+- `training_curves.png` - loss plot (best epoch marked at minimum val loss)
+
+A copy of the best weights is also written to `runs/best_pose_model.pt`.
+
 ## 3. Temporal focus model
 
 ```bash
