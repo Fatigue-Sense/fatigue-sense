@@ -64,7 +64,7 @@ from fatigue_pipeline.inference_pipeline import FrameProbs
 from fatigue_pipeline.pose_estimator import PoseEstimator
 from fatigue_pipeline.region_cropper import RegionCropper
 from model_architecture.dataset.temporal_window_dataset import DEFAULT_WINDOW_STEPS
-from model_architecture.models.bigru_temporal import build_temporal_model
+from model_architecture.models.bigru_temporal import load_temporal_checkpoint
 from model_architecture.utils.normalization import load_normalization
 from scripts.weights_path import (
     EYE_CKPT,
@@ -632,12 +632,7 @@ def main() -> None:
         norm = load_normalization(norm_path)
         norm_mean = torch.from_numpy(norm["mean"]).to(torch_device)
         norm_std = torch.from_numpy(norm["std"]).to(torch_device)
-        temporal_model = build_temporal_model().to(torch_device)
-        state = torch.load(
-            temporal_ckpt, map_location=torch_device, weights_only=True
-        )
-        temporal_model.load_state_dict(state)
-        temporal_model.eval()
+        temporal_model = load_temporal_checkpoint(temporal_ckpt, torch_device)
         print(f"[live_local] temporal model loaded - focus score active")
     else:
         print(

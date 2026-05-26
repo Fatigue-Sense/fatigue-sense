@@ -7,7 +7,7 @@ in `[0, 1]` per window.
 Input shape:  (B, T, F)
     B = batch
     T = sequence length in feature steps (default 60 = 60 s of context)
-    F = feature dim (9 by default; matches `fatigue_pipeline.constants.FEATURE_DIM`)
+    F = feature dim (17; matches `fatigue_pipeline.constants.FEATURE_DIM`)
 
 Output:
     forward()        -> focus_score in (0, 1), shape (B,)
@@ -15,7 +15,7 @@ Output:
 
 Architecture:
 
-    Input (B, T, 9)
+    Input (B, T, F)
       ↓ BiGRU(hidden, num_layers, dropout, bidirectional=True)
     Sequence (B, T, 2*hidden)
       ↓ pool (last-step | mean | last-hidden)
@@ -32,7 +32,13 @@ Default hyperparameters target the v1 design in
 
 from __future__ import annotations
 
-from typing import Literal
+import json
+import logging
+import re
+from pathlib import Path
+from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn as nn
@@ -53,6 +59,7 @@ class BiGRUTemporalModel(nn.Module):
         gru_dropout: float = 0.0,
         head_dim: int = 32,
         head_dropout: float = 0.1,
+        sequence_dropout: float = 0.0,
         pool: PoolMode = "last",
     ) -> None:
         super().__init__()
@@ -61,8 +68,7 @@ class BiGRUTemporalModel(nn.Module):
         self.num_layers = num_layers
         self.pool: PoolMode = pool
 
-        # PyTorch only applies inter-layer dropout when num_layers > 1; passing
-        # a non-zero dropout with one layer is a no-op + a warning, so guard it.
+        # PyTorch only applies inter-layer dropout when num_layers > 1.
         effective_gru_dropout = gru_dropout if num_layers > 1 else 0.0
 
         self.gru = nn.GRU(
@@ -75,6 +81,7 @@ class BiGRUTemporalModel(nn.Module):
         )
 
         pooled_dim = 2 * hidden_dim  # forward + backward
+        self.sequence_dropout = nn.Dropout(sequence_dropout)
         self.head = nn.Sequential(
             nn.Linear(pooled_dim, head_dim),
             nn.GELU(),
@@ -114,7 +121,7 @@ class BiGRUTemporalModel(nn.Module):
             )
 
         gru_out, h_n = self.gru(x)  # (B, T, 2*hidden), (2*L, B, hidden)
-        pooled = self._pool(gru_out, h_n)  # (B, 2*hidden)
+        pooled = self.sequence_dropout(self._pool(gru_out, h_n))  # (B, 2*hidden)
         logit = self.head(pooled)  # (B, 1)
         return logit.squeeze(-1)  # (B,)
 
@@ -134,6 +141,7 @@ def build_temporal_model(
     gru_dropout: float = 0.0,
     head_dim: int = 32,
     head_dropout: float = 0.1,
+    sequence_dropout: float = 0.0,
     pool: PoolMode = "last",
 ) -> BiGRUTemporalModel:
     """Construct a fresh BiGRUTemporalModel with the v1 defaults."""
@@ -144,5 +152,58 @@ def build_temporal_model(
         gru_dropout=gru_dropout,
         head_dim=head_dim,
         head_dropout=head_dropout,
+        sequence_dropout=sequence_dropout,
         pool=pool,
     )
+
+
+def infer_temporal_kwargs_from_state(state: dict[str, Any]) -> dict[str, Any]:
+    """Recover layer counts and widths from a checkpoint (no dropout keys)."""
+    layer_idxs: list[int] = []
+    for key in state:
+        match = re.match(r"gru\.weight_ih_l(\d+)$", key)
+        if match:
+            layer_idxs.append(int(match.group(1)))
+
+    w_ih = state["gru.weight_ih_l0"]
+    hidden_dim = int(w_ih.shape[0]) // 3
+    head_dim = int(state["head.0.weight"].shape[0])
+
+    return {
+        "hidden_dim": hidden_dim,
+        "num_layers": max(layer_idxs) + 1 if layer_idxs else 1,
+        "head_dim": head_dim,
+    }
+
+
+def load_temporal_checkpoint(
+    weights_path: str | Path,
+    device: torch.device | str,
+    *,
+    config_path: str | Path | None = None,
+) -> BiGRUTemporalModel:
+    """Load weights; optional ``model_config.json`` beside the checkpoint."""
+    weights_path = Path(weights_path)
+    state = torch.load(weights_path, map_location=device, weights_only=True)
+
+    if config_path is None:
+        candidate = weights_path.parent / "model_config.json"
+        config_path = candidate if candidate.is_file() else None
+
+    kwargs: dict[str, Any] = {}
+    if config_path is not None:
+        kwargs = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    else:
+        inferred = infer_temporal_kwargs_from_state(state)
+        kwargs.update(inferred)
+        logger.info(
+            "No model_config.json beside %s; inferred architecture %s",
+            weights_path,
+            inferred,
+        )
+
+    model = build_temporal_model(**kwargs)
+    model.load_state_dict(state)
+    model.to(device)
+    model.eval()
+    return model

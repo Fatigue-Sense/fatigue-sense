@@ -120,8 +120,20 @@ python -m model_architecture.train_temporal_model
 ```
 
 Download [temporal_dataset](https://huggingface.co/datasets/FatigueSense/temporal_dataset)
-(`features/` and optionally `raw_probs/`) into `data/temporal/`. Outputs:
-`runs/temporal/best.pt`, `runs/temporal/normalization.json`.
+(`features/` and optionally `raw_probs/`) into `data/temporal/`. Outputs under `runs/temporal/`:
+
+- `best.pt` - best checkpoint by validation MSE (early stopping, patience 50)
+- `normalization.json` - per-feature mean/std fit on train windows
+- `model_config.json` - BiGRU hyperparameters (use when loading `best.pt` locally)
+- `training_history.csv` - train and val MSE per epoch (updated each epoch)
+- `training_curves.png` - loss plot written at end of training
+
+Training defaults: up to **500 epochs**, early stop if val MSE does not improve for
+**50** epochs. Anti-overfit settings include train window stride 5, 2-layer BiGRU
+with dropout, feature noise, gradient clipping, and stronger weight decay (see
+`train_temporal_model.py` constants). Retraining changes `best.pt` layout vs older
+HF weights; ship `model_config.json` with new checkpoints or point inference at
+`runs/temporal/`.
 
 To **build** feature Parquets from raw video (not in this minimal release), use the
 main FatigueSense dev repo: per-frame prob extraction, then 1 Hz aggregation, then
