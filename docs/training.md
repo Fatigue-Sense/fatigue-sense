@@ -1,87 +1,54 @@
 # Training reproducibility
 
-Training scripts live in `model_architecture/`. **Datasets and pretrained weights**
-are on Hugging Face under the [FatigueSense](https://huggingface.co/FatigueSense)
-org (public -no token required). Run steps in order: per-frame models first, then
-the temporal model that consumes their outputs.
-
-| Step | Model | Training script | Dataset | Weights repo |
-|------|-------|-----------------|--------|--------------|
-| 1 | Eye / mouth ROI classifiers | `train_binary_classifier` | [binary_classifier_dataset](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset) (zip) | `eye_classifier`, `mouth_classifier` |
-| 2 | Upper-body pose (YOLO11n, 5 kpts) | `train_yolo_pose` | `pose_dataset` | `pose_model` |
-| 3 | Focus score (BiGRU) | `train_temporal_model` | `temporal_dataset` | `temporal_model` |
-
-## Hugging Face datasets
-
 | Dataset | Repository | Training step | Notes |
 |---------|------------|---------------|--------|
-| Eyes + mouth ROI crops | [FatigueSense/binary_classifier_dataset](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset) | 1  - `--roi eyes` / `--roi mouth` | Single `dataset_split.zip` (train + test, both ROIs); unzip locally (below) |
-| Pose (YOLO) | [FatigueSense/pose_dataset](https://huggingface.co/datasets/FatigueSense/pose_dataset) | 2  - `train_yolo_pose` | YOLO images + labels; `dataset.yaml` |
-| Temporal features | [FatigueSense/temporal_dataset](https://huggingface.co/datasets/FatigueSense/temporal_dataset) | 3  - `train_temporal_model` | `features/*.parquet`, optional `raw_probs/`; `manifest.json` |
+| Eyes + mouth ROI crops | [FatigueSense/binary_classifier_dataset](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset) | 1  - `--roi eyes` / `--roi mouth` | `data/binary/` - see [download section](#download-datasets-and-expected-layout) |
+| Pose (YOLO) | [FatigueSense/pose_dataset](https://huggingface.co/datasets/FatigueSense/pose_dataset) | 2  - `train_yolo_pose` | `data/pose/` + `dataset.yaml` |
+| Temporal features | [FatigueSense/temporal_dataset](https://huggingface.co/datasets/FatigueSense/temporal_dataset) | 3  - `train_temporal_model` | `data/temporal/features/*.parquet` |
 
 Published **model weights**: [eye_classifier](https://huggingface.co/FatigueSense/eye_classifier), [mouth_classifier](https://huggingface.co/FatigueSense/mouth_classifier), [pose_model](https://huggingface.co/FatigueSense/pose_model), [temporal_model](https://huggingface.co/FatigueSense/temporal_model).
 
-### Binary classifier crops (eyes + mouth)
+### Download datasets and expected layout
 
-Per-image uploads to separate `eye_dataset` / `mouth_dataset` repos are impractical
-(thousands of PNGs, HF rate limits). Use the bundled archive instead:
+Use [`scripts/download_hf_datasets.py`](../scripts/download_hf_datasets.py) from the repo root. It writes under `data/` in the shapes expected by each `train_*.py` script. Public HF repos need no token; for private mirrors set `HF_TOKEN` or run `hf auth login`.
 
-**[FatigueSense/binary_classifier_dataset](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset)**  - contains `dataset_split.zip` with `train/` and `test/` splits for both eyes and mouth (`closed` / `open` class folders).
-
-#### Download and unzip
-
-From the repo root (downloads all three HF datasets into `data/`):
+**All three datasets** (binary zip + pose + temporal snapshots):
 
 ```bash
 python -m scripts.download_hf_datasets
 ```
 
-Or only the binary zip:
+**One dataset at a time:**
 
 ```bash
 python -m scripts.download_hf_datasets --binary
+python -m scripts.download_hf_datasets --pose
+python -m scripts.download_hf_datasets --temporal
 ```
 
-Manual unzip (alternative):
+Re-download after a bad extract: add `--force`. Preview paths only: `--dry-run`.
 
-```python
-import zipfile
-from pathlib import Path
+#### 1. Binary ROI crops (eyes + mouth classifiers)
 
-from huggingface_hub import hf_hub_download
+| Item | Value |
+|------|--------|
+| HF dataset | [FatigueSense/binary_classifier_dataset](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset) |
+| Archive | `dataset_split.zip` (train + test, both ROIs in one zip) |
+| Local root | `data/binary/` |
+| Training | `train_binary_classifier.py --roi eyes` or `--roi mouth` |
 
-# From repository root
-REPO_ROOT = Path(__file__).resolve().parents[1]  # adjust if running elsewhere
-DATA_DIR = REPO_ROOT / "data" / "binary"
-
-zip_path = hf_hub_download(
-    repo_id="FatigueSense/binary_classifier_dataset",
-    filename="dataset_split.zip",
-    repo_type="dataset",
-)
-
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-with zipfile.ZipFile(zip_path, "r") as zf:
-    zf.extractall(DATA_DIR)
-```
-
-If the archive has an extra top-level `dataset_split/` folder inside the zip, move
-`train/` and `test/` into `data/binary/`.
-
-Or download `dataset_split.zip` from the [dataset files tab](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset/tree/main) and extract it yourself.
-
-#### Expected layout after unzip
+After download and unzip:
 
 ```
 data/binary/
-├── train/
+├── train/                    # used by default for training
 │   ├── eyes/
-│   │   ├── closed/   (*.png, …)
+│   │   ├── closed/           # *.png, …
 │   │   └── open/
 │   └── mouth/
 │       ├── closed/
 │       └── open/
-└── test/
+└── test/                     # holdout for evaluation (optional at train time)
     ├── eyes/
     │   ├── closed/
     │   └── open/
@@ -90,8 +57,51 @@ data/binary/
         └── open/
 ```
 
-`train_binary_classifier.py` defaults to `data/binary/train/{eyes,mouth}` (lowercase
-`closed` / `open` class folders). Override `DATASET_ROOTS` only if you store crops elsewhere.
+Class folder names must be lowercase `closed` and `open`. Training reads `data/binary/train/eyes` and `data/binary/train/mouth` unless you override `DATASET_ROOTS` in `train_binary_classifier.py`.
+
+Published weights (inference): [eye_classifier](https://huggingface.co/FatigueSense/eye_classifier), [mouth_classifier](https://huggingface.co/FatigueSense/mouth_classifier).
+
+#### 2. Pose (YOLO upper-body keypoints)
+
+| Item | Value |
+|------|--------|
+| HF dataset | [FatigueSense/pose_dataset](https://huggingface.co/datasets/FatigueSense/pose_dataset) |
+| Local root | `data/pose/` |
+| Training | `train_yolo_pose.py` (expects `data/pose/dataset.yaml`) |
+
+Typical layout after `snapshot_download`:
+
+```
+data/pose/
+├── dataset.yaml              # paths to train/val image and label dirs
+├── images/
+│   ├── train/
+│   └── val/
+└── labels/
+    ├── train/
+    └── val/
+```
+
+Exact split names follow `dataset.yaml` on the Hub. Published weights: [pose_model](https://huggingface.co/FatigueSense/pose_model).
+
+#### 3. Temporal features (BiGRU focus model)
+
+| Item | Value |
+|------|--------|
+| HF dataset | [FatigueSense/temporal_dataset](https://huggingface.co/datasets/FatigueSense/temporal_dataset) |
+| Local root | `data/temporal/` |
+| Training | `train_temporal_model.py` (reads `data/temporal/features/*.parquet`) |
+
+```
+data/temporal/
+├── features/
+│   ├── <video_id>.parquet    # one file per video, 1 Hz aggregated features
+│   └── …
+├── raw_probs/                # optional per-frame probabilities (not required to train)
+└── manifest.json             # optional dataset index from the Hub release
+```
+
+Published weights: [temporal_model](https://huggingface.co/FatigueSense/temporal_model).
 
 ## 1. Binary ROI classifiers (eyes and mouth)
 
@@ -100,17 +110,15 @@ python -m model_architecture.train_binary_classifier --roi eyes
 python -m model_architecture.train_binary_classifier --roi mouth
 ```
 
-Requires the unzipped tree above. Checkpoints go under `runs/binary/`.
+Requires `data/binary/` as in the [layout section](#1-binary-roi-crops-eyes--mouth-classifiers). Checkpoints go under `runs/binary/`.
 
 ## 2. Pose estimator
 
 ```bash
-# Expects data/pose/ (images, labels, dataset.yaml)
 python -m model_architecture.train_yolo_pose
 ```
 
-Download [pose_dataset](https://huggingface.co/datasets/FatigueSense/pose_dataset)
-into `data/pose/`. Published weights: `FatigueSense/pose_model`.
+Requires `data/pose/dataset.yaml` - see [pose layout](#2-pose-yolo-upper-body-keypoints).
 
 Per-run outputs under `runs/pose/<run_name>/` (default run name `yolo11n_pose_upper5`):
 
@@ -124,12 +132,10 @@ A copy of the best weights is also written to `runs/best_pose_model.pt`.
 ## 3. Temporal focus model
 
 ```bash
-# Expects data/temporal/features/*.parquet (one file per video)
 python -m model_architecture.train_temporal_model
 ```
 
-Download [temporal_dataset](https://huggingface.co/datasets/FatigueSense/temporal_dataset)
-(`features/` and optionally `raw_probs/`) into `data/temporal/`. Outputs under `runs/temporal/`:
+Requires `data/temporal/features/*.parquet` - see [temporal layout](#3-temporal-features-bigru-focus-model). Outputs under `runs/temporal/`:
 
 - `best.pt` - best checkpoint by validation MSE (early stopping, patience 50)
 - `normalization.json` - per-feature mean/std fit on train windows
@@ -148,14 +154,18 @@ To **build** feature Parquets from raw video (not in this minimal release), use 
 main FatigueSense dev repo: per-frame prob extraction, then 1 Hz aggregation, then
 this training step.
 
-## Download other datasets (example)
+## Manual download (optional)
+
+If you prefer the Hub API directly instead of `download_hf_datasets.py`:
 
 ```python
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download
+
+# Binary: single zip, then extract under data/binary/ (see script for layout normalization)
+hf_hub_download("FatigueSense/binary_classifier_dataset", filename="dataset_split.zip", repo_type="dataset")
 
 snapshot_download("FatigueSense/pose_dataset", repo_type="dataset", local_dir="data/pose")
-snapshot_download("FatigueSense/temporal_dataset", repo_type="dataset", local_dir="data/temporal_hf")
-# Map downloaded layouts → paths expected by each train_*.py script
+snapshot_download("FatigueSense/temporal_dataset", repo_type="dataset", local_dir="data/temporal")
 ```
 
 [← Back to README](../README.md)
