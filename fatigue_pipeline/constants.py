@@ -122,7 +122,6 @@ MOUTH_MODEL_INPUT_HW = (64, 64)
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
-
 # ---- Logit class indices (must match training label maps) ----
 EYE_CLASS_CLOSED = 0
 EYE_CLASS_OPEN = 1

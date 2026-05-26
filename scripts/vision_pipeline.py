@@ -202,7 +202,7 @@ def _draw_overlay(
     p_left_closed: float | None,
     p_right_closed: float | None,
     p_mouth_open: float | None,
-    fps: float,
+    inference_fps: float,
 ) -> None:
     left_closed = p_left_closed is not None and p_left_closed >= EYE_CLOSED_THRESH
     right_closed = p_right_closed is not None and p_right_closed >= EYE_CLOSED_THRESH
@@ -241,7 +241,9 @@ def _draw_overlay(
             caption = f"{label} --"
         _put_text(frame, caption, (x1, max(0, y1 - 4)), 0.42, color, 1)
 
-    _put_text(frame, f"fps {fps:4.1f}", (12, 24), 0.55, (200, 220, 0), 1)
+    _put_text(
+        frame, f"inference fps {inference_fps:5.1f}", (12, 24), 0.55, (200, 220, 0), 1
+    )
     lines = [
         (
             f"P(L closed) {p_left_closed:.3f}  open {1 - p_left_closed:.3f}"
@@ -267,6 +269,24 @@ def _draw_overlay(
     _put_text(frame, "q quit", (12, frame.shape[0] - 12), 0.5, (180, 180, 180), 1)
 
 
+def _preview_frame(frame: np.ndarray, max_w: int, max_h: int) -> np.ndarray:
+    """Scale to fit max size without stretching (webcam aspect varies)."""
+    h, w = frame.shape[:2]
+    if w <= 0 or h <= 0:
+        return frame
+    scale = min(max_w / w, max_h / h)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    if new_w == max_w and new_h == max_h:
+        return resized
+    canvas = np.zeros((max_h, max_w, 3), dtype=frame.dtype)
+    y0 = (max_h - new_h) // 2
+    x0 = (max_w - new_w) // 2
+    canvas[y0 : y0 + new_h, x0 : x0 + new_w] = resized
+    return canvas
+
+
 def main() -> None:
     device = _resolve_device(DEVICE)
     landmarker_path = resolve_asset(LANDMARKER_PATH)
@@ -286,23 +306,32 @@ def main() -> None:
         raise RuntimeError(f"Cannot open webcam {WEBCAM_INDEX}")
 
     cap.set(cv2.CAP_PROP_FPS, TARGET_FPS)
-    fps_avg = 0.0
+    inference_dt_avg = 0.0
+    inference_fps = 0.0
 
     try:
         while True:
-            t0 = time.perf_counter()
+            t_loop = time.perf_counter()
             ok, frame = cap.read()
             if not ok:
                 break
 
             p_left = p_right = p_mouth = None
             face_box = le_box = re_box = mo_box = None
+            t_inf_start = time.perf_counter()
             landmarks = cropper._detect_landmarks(frame)
             if landmarks is not None:
                 face_box, le_box, re_box, mo_box = _roi_boxes(frame, landmarks)
                 le, re, mo = _aligned_crops(frame, landmarks, cropper)
                 p_left, p_right = eye_clf.predict_probs_batch([le, re])
                 p_mouth = mouth_clf.predict_prob(mo)
+            inference_dt = time.perf_counter() - t_inf_start
+            inference_dt_avg = (
+                inference_dt
+                if inference_dt_avg == 0.0
+                else 0.9 * inference_dt_avg + 0.1 * inference_dt
+            )
+            inference_fps = 1.0 / inference_dt_avg if inference_dt_avg > 0 else 0.0
 
             display = cv2.flip(frame, 1)
             disp_w = display.shape[1]
@@ -315,17 +344,16 @@ def main() -> None:
                 p_left,
                 p_right,
                 p_mouth,
-                fps_avg,
+                inference_fps,
             )
-            preview = cv2.resize(display, (PREVIEW_WIDTH, PREVIEW_HEIGHT))
+            preview = _preview_frame(display, PREVIEW_WIDTH, PREVIEW_HEIGHT)
             cv2.imshow(WINDOW_TITLE, preview)
 
             if (cv2.waitKey(1) & 0xFF) == ord("q"):
                 break
 
-            dt = time.perf_counter() - t0
-            fps_avg = dt if fps_avg == 0.0 else 0.9 * fps_avg + 0.1 * dt
-            sleep_for = TARGET_DT - dt
+            loop_dt = time.perf_counter() - t_loop
+            sleep_for = TARGET_DT - loop_dt
             if sleep_for > 0:
                 time.sleep(sleep_for)
     finally:

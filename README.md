@@ -37,8 +37,10 @@ fatigue-sense/
 ├── fatigue_pipeline/         # Production inference + aggregation
 ├── model_architecture/       # Models + training scripts
 ├── scripts/
-│   ├── weights_path.py       # All checkpoint paths (edit here)
-│   └── live_inference_local.py   # End-to-end webcam demo
+│   ├── weights_path.py           # All checkpoint paths (edit here)
+│   ├── live_inference_local.py   # Full pipeline webcam demo
+│   ├── vision_pipeline.py        # Eyes + mouth only
+│   └── pose_pipeline.py          # Upper-body pose only
 ├── docs/
 │   └── training.md           # HF datasets, train commands, step order
 └── runs/                     # Created at runtime (logs, local training outputs)
@@ -135,43 +137,82 @@ Metrics will be noisier but the focus score appears sooner (~35 s vs ~90 s cold 
 **Cold start (production defaults):** ~60 s to fill the aggregator sub-window, then
 ~30 s to fill the BiGRU buffer before the first focus score.
 
-## Test the full pipeline (recommended)
+## Testing the pipeline
 
-> **Warm-up (~90 s):** With default settings, the focus score stays `--` for about
-> **90 seconds** after you start the demo. The pipeline needs **~60 s** of frames
-> before the `FeatureAggregator` emits the first 1 Hz temporal feature, then **~30 s**
-> more (30 BiGRU steps at 1 Hz) before the temporal model has enough context to
-> score focus. This is expected -not a hang.
-
-Run from the **repository root** so imports and `face_landmarker.task` resolve:
+Run all demos from the **repository root** so imports and `face_landmarker.task`
+resolve:
 
 ```bash
 cd fatigue-sense
+```
+
+Press **q** in the preview window to quit each demo.
+
+| Script | What it exercises |
+|--------|-------------------|
+| `scripts/vision_pipeline.py` | MediaPipe face ROIs + eye/mouth CNNs |
+| `scripts/pose_pipeline.py` | YOLO11n-pose upper-body keypoints (5 kpts) |
+| `scripts/live_inference_local.py` | Full stack: vision + pose + aggregator + BiGRU |
+
+Work through the table top to bottom when validating a fresh install, or jump
+straight to `live_inference_local.py` if you only need the end-to-end check.
+
+### Vision only (eyes + mouth)
+
+```bash
+python scripts/vision_pipeline.py
+```
+
+- No warm-up delay; scores update every frame.
+- Preview shows face/eye/mouth boxes and `P(L closed)`, `P(R closed)`, `P(mouth open)`.
+- Does **not** run pose, `FeatureAggregator`, or the temporal model.
+- Requires `face_landmarker.task` and HF eye/mouth weights (see Configuration).
+
+### Pose only
+
+```bash
+python scripts/pose_pipeline.py
+```
+
+- No warm-up delay; keypoints update every frame.
+- Preview draws the 5-kpt upper-body skeleton (nose, ears, shoulders) and per-joint confidence.
+- Does **not** run face landmarks, eye/mouth CNNs, or temporal scoring.
+- Requires `POSE_MODEL_PATH` (HF auto-download by default).
+
+### Full pipeline (recommended)
+
+> **Warm-up (~90 s):** With default settings, the focus score stays `--` for about
+> **90 seconds** after you start. The pipeline needs **~60 s** of frames before
+> `FeatureAggregator` emits the first 1 Hz feature, then **~30 s** more (30 BiGRU
+> steps at 1 Hz) before the temporal model can score focus. This is expected -not a hang.
+
+```bash
 python scripts/live_inference_local.py
 ```
 
-### What to expect
+**What to expect**
 
 1. Console prints resolved paths for eye/mouth/pose/temporal assets.
-2. A preview window opens with:
+2. Preview window:
    - Left HUD: raw CNN probabilities + 17 aggregated features
    - Right HUD: focus score, blink/yawn counters, FPS
 3. For ~90 s, focus shows `--` while buffers fill (see warm-up note above).
-4. Press **Q** or **Esc** to quit.
 
-### Outputs
+**Faster smoke test:** set `DEMO_SUB_WINDOW_S = 5` in `live_inference_local.py`
+(metrics noisier; focus appears sooner).
 
-- `runs/live_inference_steps.csv`  - per-second feature log (overwritten each run)
+**Output:** `runs/live_inference_steps.csv` (per-second feature log, overwritten each run).
 
-### Troubleshooting
+### Troubleshooting (all demos)
 
 | Issue | Fix |
 |-------|-----|
 | `FileNotFoundError: face_landmarker.task` | Download landmarker (above) or fix `LANDMARKER_PATH` |
 | HF 401 / 403 | Default repos are public; check path/URL. For private mirrors, use `HF_TOKEN` |
-| Focus stays `--` | Wait for cold start, or lower `DEMO_SUB_WINDOW_S` |
-| CUDA OOM | Set `DEVICE = "cpu"` in `live_inference_local.py` |
-| No camera | Change `WEBCAM_INDEX` (try `1`, `2`, …) |
+| Focus stays `--` (full demo only) | Wait for cold start, or lower `DEMO_SUB_WINDOW_S` |
+| CUDA OOM | Set `DEVICE = "cpu"` in the script you are running |
+| No camera | Change `WEBCAM_INDEX` in that script (try `1`, `2`, …) |
+| Stretched preview | Fixed in `vision_pipeline` / `pose_pipeline`; `live_inference_local` may still letterbox on resize |
 
 ## Reproduce training (optional)
 

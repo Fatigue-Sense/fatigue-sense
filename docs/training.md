@@ -30,6 +30,20 @@ Per-image uploads to separate `eye_dataset` / `mouth_dataset` repos are impracti
 
 #### Download and unzip
 
+From the repo root (downloads all three HF datasets into `data/`):
+
+```bash
+python -m scripts.download_hf_datasets
+```
+
+Or only the binary zip:
+
+```bash
+python -m scripts.download_hf_datasets --binary
+```
+
+Manual unzip (alternative):
+
 ```python
 import zipfile
 from pathlib import Path
