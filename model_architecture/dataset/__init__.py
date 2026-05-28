@@ -1,9 +1,8 @@
-"""Datasets for FatigueSense training scripts."""
+"""
+Datasets for FatigueSense training scripts
+"""
 
-from model_architecture.dataset.binary_classifier_dataset import (
-    BinaryClassifierDataset,
-    build_dataloaders,
-)
+from model_architecture.dataset.binary_classifier_dataset import BinaryClassifierDataset, build_dataloaders
 from model_architecture.dataset.temporal_window_dataset import (
     DEFAULT_SEED,
     DEFAULT_VAL_FRACTION,

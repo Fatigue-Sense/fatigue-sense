@@ -1,12 +1,6 @@
-"""Per-frame emit gate.
-
-State machine. Returns True from ``tick()`` only when:
-    1. enough frames have been seen to fill the sub-window, AND
-    2. the configured stride has elapsed since the last emit.
-"""
+"""Small helper that emits only after the window is full and the stride has passed"""
 
 from __future__ import annotations
-
 
 class StrideGate:
     def __init__(self, sub_window_frames: int, stride_frames: int) -> None:
@@ -25,7 +19,7 @@ class StrideGate:
         self._frames_since_emit = 0
 
     def tick(self) -> bool:
-        """Advance one frame. Returns True when an emit is due."""
+        """Record one frame and return True when a new feature row is due"""
         self._frames_seen += 1
         self._frames_since_emit += 1
         if (

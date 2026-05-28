@@ -1,13 +1,9 @@
-"""Download FatigueSense training datasets from Hugging Face into ``data/``.
+"""
+Download FatigueSense training datasets from Hugging Face into data/
 
-Layouts match ``model_architecture/train_*.py`` defaults:
-
-  data/binary/   <- FatigueSense/binary_classifier_dataset (dataset_split.zip)
-  data/pose/     <- FatigueSense/pose_dataset
-  data/temporal/ <- FatigueSense/temporal_dataset
-
-Public repos need no token. For private mirrors, set ``HF_TOKEN`` or run
-``hf auth login``.
+data/binary/   <- FatigueSense/binary_classifier_dataset (dataset_split.zip)
+data/pose/     <- FatigueSense/pose_dataset
+data/temporal/ <- FatigueSense/temporal_dataset
 
 Usage:
     python -m scripts.download_hf_datasets

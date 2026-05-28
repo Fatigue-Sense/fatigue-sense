@@ -1,11 +1,7 @@
-"""Webcam demo: YOLO upper-body pose only (5 keypoints).
+"""
+Webcam demo for the upper-body pose model.
 
-Visualizes skeleton overlay and per-keypoint confidence. No face landmarks,
-eye/mouth CNNs, aggregator, or temporal model. Run from the repository root:
-
-    python scripts/pose_pipeline.py
-
-Checkpoint path comes from ``scripts/weights_path.py`` (``POSE_MODEL_PATH``).
+Shows the five pose keypoints and their confidence scores.
 """
 
 from __future__ import annotations
@@ -170,7 +166,7 @@ def _draw_overlay(
 
 
 def _preview_frame(frame: np.ndarray, max_w: int, max_h: int) -> np.ndarray:
-    """Scale to fit max size without stretching (webcam aspect varies)."""
+    """Scale to fit max size without stretching"""
     h, w = frame.shape[:2]
     if w <= 0 or h <= 0:
         return frame

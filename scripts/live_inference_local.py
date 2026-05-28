@@ -1,27 +1,8 @@
-"""Local-only webcam demo with the full FatigueSense pipeline.
+"""
+Run the full FatigueSense pipeline on a local webcam.
 
-Runs MediaPipe FaceLandmarker + the eye/mouth CNN classifiers +
-YOLO11n-pose upper-body kpts in-process, feeds them through the same
-``FeatureAggregator`` the offline pipeline uses, and then through the
-BiGRU temporal model to display a continuous focus score.
-
-The preview shows:
-    - left HUD: per-frame raw probs + all 17 aggregated feature values
-    - right HUD: big focus score + cumulative blink / yawn counters
-    - three FPS values:
-        inference_fps  - frame capture -> per-frame probs + aggregator update
-        temporal_fps   - feature step -> BiGRU forward (only when buffer full)
-        overall_fps    - whole loop iteration (capture -> display)
-
-Aggregator defaults mirror the production pipeline: ``sub_window_s=60``
-and ``step_stride_s=1``. With the BiGRU's ``window_steps=30`` that maps
-to a ~90 s cold-start budget (60 s to fill the first sub-window + 30 s
-to fill the temporal buffer).
-
-Set ``DEMO_SUB_WINDOW_S=5`` for faster iteration; metric values will be
-noisier than at the production 60 s window.
-
-Model checkpoint paths live in ``scripts/weights_path.py``.
+The demo shows live eye/mouth probabilities, pose features, blink/yawn counts,
+and the BiGRU focus score.
 """
 
 from __future__ import annotations
@@ -263,12 +244,8 @@ def _draw_pose(frame: np.ndarray, kpts: np.ndarray | None) -> None:
 
 
 def _status_label(score: float | None) -> tuple[str, tuple[int, int, int]]:
-    """Map focus score -> short label + BGR color.
-
-    Thresholds calibrated to the bootstrap label heuristic in
-    ``temporal_window_dataset.default_label_from_window`` (PERCLOS-
-    dominant, pose as 20% modifier). DROWSY band starts at 0.55 so
-    PERCLOS ~= 0.6 alone is enough to leave ALERT.
+    """
+    Return a display label and BGR color for a focus score
     """
     if score is None:
         return ("WARM-UP", (180, 180, 180))
@@ -618,7 +595,7 @@ def main() -> None:
         device=device if device != "mps" else None,
     )
 
-    # Temporal model -----------------------------------------------------
+    # Temporal model
     torch_device = torch.device(device)
     temporal_model = None
     norm_mean = None
@@ -673,8 +650,6 @@ def main() -> None:
     score_raw: float | None = None
     score_ema: float | None = None
     blink_total = 0
-    # Counts emits since the buffer first filled; BiGRU forward only fires
-    # when this counter is a multiple of BIGRU_INFERENCE_STRIDE.
     emits_since_full = 0
     yawn_total = 0
 
@@ -692,8 +667,6 @@ def main() -> None:
             ok, frame = cap.read()
             if not ok:
                 break
-            # Inference frame is NOT flipped (training distribution).
-            # Display copy below is mirrored for selfie feel.
             h, w = frame.shape[:2]
 
             # --- Inference timing zone -----------------------------------
@@ -876,7 +849,7 @@ def main() -> None:
                 )
                 step_log_file.flush()
 
-            # --- Build display (flip + draw overlay) --------------------
+            # --- Build display --------------------
             display = cv2.flip(frame, 1)
             disp_w = display.shape[1]
             _draw_geometry(

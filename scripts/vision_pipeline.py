@@ -1,11 +1,10 @@
-"""Webcam demo: MediaPipe face landmarks through eye/mouth CNN classifiers.
+"""
+Webcam demo: MediaPipe face landmarks through eye/mouth CNN classifiers.
 
 Visualizes ROI bounding boxes and per-frame probabilities (no pose, aggregator,
 or temporal model). Run from the repository root:
 
     python scripts/vision_pipeline.py
-
-Checkpoint paths come from ``scripts/weights_path.py``.
 """
 
 from __future__ import annotations

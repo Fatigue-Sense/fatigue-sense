@@ -1,11 +1,8 @@
-"""Production face-region cropper.
+"""
+Crops the eye and mouth regions used by the fatigue pipeline
 
-Self-contained copy used by the inference pipeline. Wraps MediaPipe
-FaceLandmarker and returns left-eye, right-eye, and mouth crops sized
-geometrically from inter-eye distance.
-
-This module duplicates the labelling-side cropper in `vision_pipeline/`
-intentionally - production code must not depend on dev-only tooling.
+Uses MediaPipe face landmarks to find the eyes and mouth, then returns fixed-size
+crops for the CNN classifiers
 """
 
 from __future__ import annotations
@@ -36,16 +33,12 @@ from fatigue_pipeline.constants import (
     RIGHT_EYE_OUTER_CORNER,
 )
 
-
-CropResult = tuple[
-    np.ndarray | None,
-    np.ndarray | None,
-    np.ndarray | None,
-]
-
+CropResult = tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]
 
 class RegionCropper:
-    """Detect MediaPipe face landmarks and crop eyes/mouth regions."""
+    """
+    Detect MediaPipe face landmarks and crop eyes/mouth regions
+    """
 
     def __init__(
         self,
@@ -79,8 +72,7 @@ class RegionCropper:
         self.frame_idx = 0
         if fps is not None and fps > 0:
             self.fps = fps
-        # Recreate the landmarker - VIDEO mode requires monotonic timestamps,
-        # so a fresh instance is the only way to safely restart at t=0.
+
         if self.landmarker is not None:
             self.landmarker.close()
         self.landmarker = vision.FaceLandmarker.create_from_options(
@@ -118,10 +110,8 @@ class RegionCropper:
     def get_face_roll_deg(
         cls, landmarks: list[Any], w: int, h: int
     ) -> float:
-        """Roll angle (deg) of the eye line, positive = head tilted right.
-
-        Computed from the two outer eye corners. Subtract this from the
-        frame so the eye axis is horizontal before cropping.
+        """
+        Return the face roll angle from the outer eye corners
         """
         left = cls.landmark_to_pixel(landmarks[LEFT_EYE_OUTER_CORNER], w, h)
         right = cls.landmark_to_pixel(landmarks[RIGHT_EYE_OUTER_CORNER], w, h)
@@ -138,14 +128,11 @@ class RegionCropper:
         box_h: int,
         out_size: tuple[int, int],
     ) -> tuple[np.ndarray | None, tuple[int, int, int, int] | None]:
-        """Rotate the frame so the eye axis is horizontal, then crop.
+        """
+        Rotate around the crop center, then take a fixed-size box.
 
-        The classifier was trained on (mostly) upright eyes; this brings
-        tilted heads back onto the training manifold without retraining.
-
-        Returned ``box`` is the axis-aligned slice in the *rotated*
-        frame's coordinates. For display overlays on the original frame
-        the caller should compute its own axis-aligned bbox.
+        The eye classifier was trained mostly on upright crops, so this helps keep
+        tilted faces closer to the training data
         """
         h, w = frame.shape[:2]
         cx, cy = center

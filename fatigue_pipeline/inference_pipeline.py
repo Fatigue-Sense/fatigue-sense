@@ -1,30 +1,20 @@
-"""End-to-end Phase A + Phase B inference pipeline.
+"""
+Runs ROI cropping and CNN classifiers for each video frame.
 
-Connects `RegionCropper` (MediaPipe-based ROI extraction) with the trained
-binary ROI classifiers and produces a single per-frame probability record:
-
-    FrameProbs(frame_idx, timestamp_s, face_detected,
-               p_eye_left_closed, p_eye_right_closed, p_mouth_open)
-
-The mouth predictor is optional - the pipeline still runs (returning None
-for `p_mouth_open`) when no mouth checkpoint is provided.
+The pipeline crops the eye and mouth regions, runs the trained classifiers,
+and returns the probabilities needed by the feature aggregator.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-
 import numpy as np
 import torch
 
-from fatigue_pipeline.cnn_predictors import (
-    EyeStateClassifier,
-    MouthStateClassifier,
-)
+from fatigue_pipeline.cnn_predictors import EyeStateClassifier, MouthStateClassifier
 from fatigue_pipeline.constants import DEFAULT_FPS
 from fatigue_pipeline.region_cropper import RegionCropper
-
 
 @dataclass
 class FrameProbs:
@@ -34,18 +24,15 @@ class FrameProbs:
     p_eye_left_closed: float | None
     p_eye_right_closed: float | None
     p_mouth_open: float | None
-    # Upper-body pose keypoints (shape: (POSE_NUM_KPTS, 3), columns: x, y, conf).
-    # None when YOLO pose estimator wasn't run, or no person detected.
-    # NaN per-row when a single kpt fell below POSE_MIN_KPT_CONF.
     keypoints: np.ndarray | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
 
-
 class FatiguePipeline:
-    """Phase A + Phase B fused inference."""
-
+    """
+    Combines ROI cropping with eye and mouth classification
+    """
     def __init__(
         self,
         face_landmarker_path: str | Path,
@@ -75,7 +62,9 @@ class FatiguePipeline:
         return self.cropper.fps
 
     def process_frame(self, frame: np.ndarray) -> FrameProbs:
-        """Run Phase A + Phase B on a single BGR frame."""
+        """
+        Process one BGR frame and return eye/mouth probabilities
+        """
         idx = self.cropper.frame_idx
         timestamp_s = idx / self.cropper.fps
 

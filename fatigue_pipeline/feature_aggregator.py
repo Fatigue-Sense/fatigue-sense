@@ -1,22 +1,11 @@
-"""Stateful rolling-window feature aggregator (orchestrator).
+"""
+Builds rolling-window feature rows from per-frame model outputs
 
-Composes the building blocks in ``fatigue_pipeline.aggregation``:
-
-    SignalBuffer        - ring buffer per per-frame channel
-    SchmittDetector     - hysteresis edge detection per fused signal
-    WindowEventTracker  - windowed event counts + durations
-    StrideGate          - per-frame emit gating
-    compute_step_features() - pure run-length aggregation (fallback)
-    bilateral_mean()    - NaN-tolerant L/R eye fusion
-
-Data types (``StepFeatures``, ``FeatureStep``) and the pure
-``compute_step_features()`` live in the aggregation package and are
-re-exported here for backward compatibility - existing imports of
-``from fatigue_pipeline.feature_aggregator import ...`` keep working.
+This keeps the live state needed for buffering, event counting, stride timing,
+and pose feature aggregation.
 """
 
 from __future__ import annotations
-
 from fatigue_pipeline.aggregation import (
     FeatureStep,
     PoseSignalBuffer,
@@ -44,31 +33,16 @@ from fatigue_pipeline.constants import (
 from fatigue_pipeline.inference_pipeline import FrameProbs
 
 
-__all__ = [
-    "FeatureAggregator",
-    "FeatureStep",
-    "StepFeatures",
-    "compute_step_features",
-]
-
+__all__ = ["FeatureAggregator", "FeatureStep", "StepFeatures", "compute_step_features"]
 
 def _frames_for(seconds: float, fps: float) -> int:
+    # Always keep at least one frame, so tiny windows do not create empty buffers
     return max(1, int(round(seconds * fps)))
 
-
 class FeatureAggregator:
-    """Live rolling-window feature builder.
-
-    Usage::
-
-        aggregator = FeatureAggregator(fps=video_fps)
-        for frame in video:
-            probs = pipeline.process_frame(frame)
-            step = aggregator.add(probs)
-            if step is not None and step.features.valid:
-                window.append(step.features.to_array())
     """
-
+    Builds feature rows from a stream of per-frame probabilities
+    """
     def __init__(
         self,
         fps: float = DEFAULT_FPS,
@@ -117,7 +91,9 @@ class FeatureAggregator:
     # ---- lifecycle ----
 
     def reset(self, fps: float | None = None) -> None:
-        """Clear buffers. Pass ``fps`` to also resize for a new clip."""
+        """
+        Clear buffers, pass fps to also resize for a new clip
+        """
         if fps is not None and fps > 0:
             self.fps = fps
             self._reconfigure_for_fps()
@@ -138,7 +114,9 @@ class FeatureAggregator:
     # ---- per-frame ingest ----
 
     def add(self, probs: FrameProbs) -> FeatureStep | None:
-        """Push one per-frame record. Returns a step on stride boundaries."""
+        """
+        Add one frame of probabilities and return a feature step when ready
+        """
         eye_l = self._eye_l.push(probs.p_eye_left_closed)
         eye_r = self._eye_r.push(probs.p_eye_right_closed)
         mouth = self._mouth.push(probs.p_mouth_open)
@@ -160,9 +138,8 @@ class FeatureAggregator:
             fps=self.fps,
         )
 
-        # Override rate + mean-duration with edge-triggered numbers.
-        # The pure compute_step_features() uses run-length counting which
-        # double-counts events across overlapping sub-windows.
+        # Use the edge detectors for event rate and duration so overlapping windows
+        # do not count the same blink or yawn more than once.
         features.blink_rate_bpm = self._blink_tracker.rate_per_min(frame_idx)
         features.yawn_rate_per_min = self._yawn_tracker.rate_per_min(frame_idx)
         features.mean_blink_duration = self._blink_tracker.mean_duration_s(self.fps)
@@ -202,9 +179,7 @@ class FeatureAggregator:
     def stride_frames(self) -> int:
         return self._gate.stride_frames
 
-    # ---- live event state (uses the same edge-triggered detectors as the
-    # per-second feature emission, so any consumer sees identical
-    # behavior to what ``yawn_count_total`` / ``blink_count_total`` reflect).
+    # Live status uses the same detectors as the emitted feature rows
 
     @property
     def is_yawning(self) -> bool:

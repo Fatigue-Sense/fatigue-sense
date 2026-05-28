@@ -1,8 +1,5 @@
 """
-Binary ROI classifier dataset (eyes or mouth).
-
-Loads class folders under a single root, e.g. ``train/eyes/closed/*.png``.
-Label mapping is passed in via ``class_to_label`` (typically closed=0, open=1).
+Binary ROI classifier dataset (eyes or mouth)
 """
 
 from __future__ import annotations
@@ -56,7 +53,6 @@ _MINORITY_TRANSFORMS = transforms.Compose(
     ]
 )
 
-
 class BinaryClassifierDataset(Dataset):
     def __init__(
         self,
@@ -95,7 +91,6 @@ class BinaryClassifierDataset(Dataset):
         elif self.transform:
             image = self.transform(image)
         return image, label
-
 
 def build_dataloaders(
     root: str | Path,

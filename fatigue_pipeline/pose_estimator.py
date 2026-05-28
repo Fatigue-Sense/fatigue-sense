@@ -1,26 +1,15 @@
-"""YOLO11n-pose upper-body keypoint extractor.
+"""
+Upper-body pose estimator used by the fatigue pipeline.
 
-Thin wrapper around Ultralytics YOLO returning a numpy (POSE_NUM_KPTS, 3)
-array per frame: ``[x, y, conf]`` rows for the upper-body subset (nose,
-ears, shoulders). Eyes are produced by YOLO internally but dropped from
-the persisted subset - no current pose feature uses them, and the Phase
-B eye classifier already covers eye-state behavior.
-
-A kpt whose model confidence falls below ``POSE_MIN_KPT_CONF`` is replaced
-with NaN so downstream aggregation can treat it as missing. If no person
-is detected at all, ``predict()`` returns ``None``.
-
-Weight resolution: if ``weights_path`` is a local file that exists, it
-is used as-is. Otherwise the loader falls back to the bare model name
-``yolo11n-pose.pt``; Ultralytics resolves that via its local cache and
-auto-downloads from its model registry on first use.
+Returns nose, ear, and shoulder keypoints as [x, y, confidence] rows.
+Low-confidence keypoints are set to NaN so the aggregator can treat them as
+missing.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-
 import numpy as np
 
 from fatigue_pipeline.constants import (
@@ -34,10 +23,10 @@ logger = logging.getLogger(__name__)
 
 ULTRALYTICS_FALLBACK = "yolo11n-pose.pt"
 
-
 class PoseEstimator:
-    """Stateless per-frame upper-body keypoint extractor."""
-
+    """
+    Runs YOLO pose inference and keeps the upper-body keypoints
+    """
     def __init__(
         self,
         weights_path: str | Path,
@@ -60,8 +49,8 @@ class PoseEstimator:
             resolved = ULTRALYTICS_FALLBACK
 
         self.model = YOLO(resolved)
-        # Park the model on the requested device once at load time so each
-        # frame's predict() doesn't pay a CUDA round-trip.
+
+        # Move the model once instead of doing it on every frame
         if device:
             self.model.to(device)
         self.device = device
@@ -71,11 +60,8 @@ class PoseEstimator:
         self._closed = False
 
     def predict(self, frame_bgr: np.ndarray) -> np.ndarray | None:
-        """Run pose estimation on one BGR frame.
-
-        Returns ``(POSE_NUM_KPTS, 3)`` float32 array (x, y, conf) for the
-        most confident person, with low-conf kpts replaced by NaN. Returns
-        ``None`` when no person passes ``person_conf``.
+        """
+        Return upper-body keypoints for the best detected person, if any
         """
         if self._closed:
             raise RuntimeError("PoseEstimator is closed")
@@ -95,9 +81,6 @@ class PoseEstimator:
         else:
             best = 0
 
-        # Two model shapes are supported:
-        #  * retrained 5-kpt head -> emits exactly POSE_NUM_KPTS, use as-is
-        #  * stock COCO-17 (Ultralytics fallback) -> slice the upper subset
         n_model_kpts = kpts_np.shape[1]
         if n_model_kpts == POSE_NUM_KPTS:
             upper = kpts_np[best, :, :].astype(np.float32).copy()
@@ -115,9 +98,7 @@ class PoseEstimator:
         return upper
 
     def close(self) -> None:
-        """Mark the estimator closed. Subsequent ``predict()`` raises.
-
-        Ultralytics holds no OS handles that require cleanup; the flag is
-        kept so callers can mirror the ``RegionCropper`` lifecycle.
+        """
+        Mark the estimator as closed
         """
         self._closed = True

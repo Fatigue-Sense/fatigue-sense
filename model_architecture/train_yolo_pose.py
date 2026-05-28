@@ -1,31 +1,11 @@
-"""YOLO11n-pose retraining script - 5-kpt upper-body head.
+"""
+Train the upper-body YOLO pose model used by the fatigue pipeline.
 
-Trains a custom-head YOLO11n-pose model on the FatigueSense pose dataset
-(see ``data/pose/dataset.yaml``). The pose head is rebuilt for the 5
-upper-body keypoints we actually consume (nose, ears, shoulders); the
-backbone is warm-started from the stock COCO ``yolo11n-pose.pt`` weights
-via ``model.load()``, which silently skips the kpt-head layers because
-their shapes no longer match.
+The custom pose head predicts the five keypoints: nose, ears, and shoulders.
 
-Checkpointing:
-  * Ultralytics writes ``last.pt`` (and ``best.pt``) every epoch.
-  * ``SAVE_PERIOD`` additionally snapshots ``epoch<N>.pt`` every N epochs
-    so an OOM / power loss mid-run can be rolled back to a named epoch.
-  * After training, exports ``training_history.csv`` and ``training_curves.png``
-    (train/val loss per epoch) from Ultralytics ``results.csv``.
-
-Resume an interrupted run::
-
-    python -m model_architecture.train_yolo_pose --resume
-
-That reloads the newest ``last.pt`` under the run dir and continues with
-the exact args saved in the checkpoint (epoch count, LR schedule, aug).
-A fresh run (no flag) builds the 5-kpt head from scratch.
-
-Usage::
-
-    python -m model_architecture.train_yolo_pose            # fresh
-    python -m model_architecture.train_yolo_pose --resume   # continue
+Usage:
+    python -m model_architecture.train_yolo_pose # fresh
+    python -m model_architecture.train_yolo_pose --resume # continue
 """
 
 from __future__ import annotations
@@ -37,22 +17,20 @@ from pathlib import Path
 
 import pandas as pd
 
-# ---- knobs ----
+# Training settings
 DATA_YAML = Path("data/pose/dataset.yaml")
-ARCH_YAML = "yolo11n-pose.yaml"  # ultralytics-resolved, 5-kpt head from data yaml
-PRETRAINED = "yolo11n-pose.pt"  # backbone warm-start (kpt head dropped)
+ARCH_YAML = "yolo11n-pose.yaml" # uses the 5-keypoint layout from dataset.yaml
+PRETRAINED = "yolo11n-pose.pt"
 
 EPOCHS = 100
-BATCH = 8  # RTX 4050 6GB safe; bump if VRAM allows
+BATCH = 8
 IMGSZ = 640
 WORKERS = 4
 PATIENCE = 25
-DEVICE = 0  # 0 = first CUDA GPU; set to "cpu" if no GPU
-SAVE_PERIOD = 5  # snapshot epoch<N>.pt every N epochs; -1 disables
+DEVICE = 0
+SAVE_PERIOD = 5
 
-# Augmentation - heavier than YOLO defaults because our 25 videos lack
-# subject/lighting diversity. Mosaic is the biggest gain for pose; keep
-# fliplr active since we declared flip_idx in the dataset yaml.
+# Slightly stronger augmentation to make up for the small pose dataset.
 AUG = {
     "hsv_h": 0.015,
     "hsv_s": 0.7,
@@ -69,15 +47,11 @@ AUG = {
 PROJECT_DIR = "runs/pose"
 RUN_NAME = "yolo11n_pose_upper5"
 
-# Where the live pipeline expects the trained weights to land.
 FINAL_WEIGHTS_DEST = Path("runs/best_pose_model.pt")
 
-
 def _disable_remote_logging(settings) -> None:
-    """Kill every Ultralytics auto-integration (ClearML, W&B, etc.).
-
-    They auto-activate whenever the matching package is installed AND a
-    global config exists; we want no remote experiment logging here.
+    """
+    Turn off Ultralytics logging integrations for this training script.
     """
     settings.update(
         {
@@ -95,7 +69,9 @@ def _disable_remote_logging(settings) -> None:
 
 
 def _find_last_checkpoint() -> Path | None:
-    """Newest ``last.pt`` under PROJECT_DIR belonging to this run name."""
+    """
+    Find the newest saved checkpoint for this run
+    """
     matches = glob.glob(f"{PROJECT_DIR}/**/weights/last.pt", recursive=True)
     matches = [m for m in matches if RUN_NAME in m]
     if not matches:
@@ -104,7 +80,9 @@ def _find_last_checkpoint() -> Path | None:
 
 
 def _parse_ultralytics_results(save_dir: Path) -> pd.DataFrame | None:
-    """Build per-epoch train/val loss table from Ultralytics ``results.csv``."""
+    """
+    Read train/val losses from Ultralytics results.csv
+    """
     results_csv = save_dir / "results.csv"
     if not results_csv.is_file():
         return None
@@ -165,7 +143,9 @@ def _plot_loss_curves(
 
 
 def _export_training_artifacts(save_dir: Path) -> None:
-    """Write training_history.csv + training_curves.png under the run directory."""
+    """
+    Save a small training history table and loss plot
+    """
     history = _parse_ultralytics_results(save_dir)
     if history is None or history.empty:
         print(f"WARNING: could not parse training history from {save_dir / 'results.csv'}")
@@ -210,12 +190,11 @@ def main(argv: list[str] | None = None) -> None:
                 f"for run '{RUN_NAME}'. Run a fresh train first."
             )
         print(f"Resuming from {ckpt}")
-        # resume=True restores epoch count, LR schedule, and aug from the
-        # checkpoint - do NOT re-pass the train args, they're ignored.
+        # Ultralytics restores the saved training settings
         model = YOLO(str(ckpt))
         results = model.train(resume=True)
     else:
-        # Build a fresh 5-kpt head, warm-start everything else from COCO.
+        # Build a fresh 5-kpt head, warm-start everything else from COCO
         model = YOLO(ARCH_YAML).load(PRETRAINED)
         results = model.train(
             data=str(DATA_YAML),

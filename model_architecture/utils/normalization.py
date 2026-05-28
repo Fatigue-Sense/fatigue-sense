@@ -1,8 +1,5 @@
-"""Per-feature normalization fit / save / load.
-
-The canonical feature-name order from `fatigue_pipeline.constants.FEATURE_NAMES`
-is persisted alongside the stats so consumers can sanity-check that the
-columns at inference time line up with the columns the model trained on.
+"""
+Fit, save, and load feature normalization stats
 """
 
 from __future__ import annotations

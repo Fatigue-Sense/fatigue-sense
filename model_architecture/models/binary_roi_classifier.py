@@ -1,21 +1,14 @@
 """
-Binary ROI Classifier — Model
-Shared MobileNetV3-Small backbone for all four ROI binary classifiers
-(Eyes, Mouth, Head, Torso). Returns raw logits (B, 2).
+MobileNetV3-Small binary classifier for ROI crops.
 
-Use torch.softmax(logits, dim=-1) externally when needed (ThresholdPredictor does this).
-Training uses CrossEntropyLoss directly on logits.
-
-For threshold-based pseudo-labeling, see src/pipeline/threshold_predictor.py.
-See docs/phase_b/binary_classifier_bootstrap.md for the full bootstrap pipeline.
+The model returns raw two-class logits and apply softmax outside the model when
+probabilities are needed.
 """
-
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
 from torchvision.models import MobileNet_V3_Small_Weights, mobilenet_v3_small
-
 
 class BinaryROIClassifier(nn.Module):
     BACKBONE_OUT_FEATURES = 576
@@ -65,7 +58,9 @@ class BinaryROIClassifier(nn.Module):
 def build_binary_classifier(
     pretrained: bool = True, freeze_backbone: bool = True, dropout: float = 0.2
 ) -> BinaryROIClassifier:
-    """Construct a fresh BinaryROIClassifier."""
+    """
+    Construct a fresh BinaryROIClassifier
+    """
     return BinaryROIClassifier(
         pretrained=pretrained, freeze_backbone=freeze_backbone, dropout=dropout
     )

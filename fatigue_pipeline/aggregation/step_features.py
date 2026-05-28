@@ -1,22 +1,11 @@
-"""Per-step feature record types.
-
-``StepFeatures`` is the immutable-shaped 9-D vector the BiGRU consumes.
-``FeatureStep`` wraps it with the timing metadata + event counters that
-``FeatureAggregator`` emits per stride.
-"""
-
 from __future__ import annotations
-
 from dataclasses import dataclass
-
 import numpy as np
-
 from fatigue_pipeline.constants import FEATURE_NAMES
-
 
 @dataclass
 class StepFeatures:
-    """One per-second aggregated feature vector for the temporal model."""
+    """One per-second aggregated feature vector for the temporal model"""
 
     perclos: float
     blink_rate_bpm: float
@@ -48,7 +37,6 @@ class StepFeatures:
     def to_dict(self) -> dict[str, float | bool]:
         return {name: getattr(self, name) for name in (*FEATURE_NAMES, "valid")}
 
-
 @dataclass
 class FeatureStep:
     """Live feature row with timestamp metadata."""
@@ -56,9 +44,5 @@ class FeatureStep:
     step_idx: int
     timestamp_s: float
     features: StepFeatures
-    # Cumulative event counts since aggregator reset. Surfaced for backend
-    # display only - NOT fed to the temporal model. Counts are produced by
-    # an edge-triggered detector to avoid the sliding-window double-count
-    # of pure run-length aggregation.
     blink_count_total: int = 0
     yawn_count_total: int = 0

@@ -1,14 +1,5 @@
 """
-Composable building blocks for the per-step feature aggregator.
-
-- ``event_detector`` : Schmitt-trigger edge detection for one signal
-- ``event_tracker`` : windowed event counts + durations
-- ``signal_buffer`` : fixed-length ring buffer with NaN policy
-- ``fusion`` : NaN-tolerant bilateral fuser (left + right eye)
-- ``pose_signal`` : upper-body kpt buffer + pose feature aggregation
-- ``stride_gate`` : per-frame emit gate
-- ``step_features`` : StepFeatures + FeatureStep data classes
-- ``step_builder`` : pure compute_step_features() function
+Composable building blocks for the per-step feature aggregator
 """
 
 from fatigue_pipeline.aggregation.event_detector import (CompletedEvent, SchmittDetector)

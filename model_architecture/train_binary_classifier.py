@@ -1,5 +1,5 @@
 """
-Binary ROI Classifier — Training Script
+Binary ROI Classifier training Script
 
 Loads MobileNetV3-Small ImageNet weights, then fine-tunes the full network
 (backbone + head) end-to-end. MixUp (alpha=0.4) activates after a short warmup.

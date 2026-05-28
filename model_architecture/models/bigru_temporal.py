@@ -1,33 +1,8 @@
-"""BiGRU temporal model for FatigueSense (Phase C).
+"""
+BiGRU model used to score a window of fatigue features
 
-Consumes a sliding window of per-second feature vectors produced by
-`fatigue_pipeline.feature_aggregator` and emits a continuous focus score
-in `[0, 1]` per window.
-
-Input shape:  (B, T, F)
-    B = batch
-    T = sequence length in feature steps (default 60 = 60 s of context)
-    F = feature dim (17; matches `fatigue_pipeline.constants.FEATURE_DIM`)
-
-Output:
-    forward()        -> focus_score in (0, 1), shape (B,)
-    forward_logits() -> raw logit, shape (B,)  (use with BCEWithLogitsLoss)
-
-Architecture:
-
-    Input (B, T, F)
-      ↓ BiGRU(hidden, num_layers, dropout, bidirectional=True)
-    Sequence (B, T, 2*hidden)
-      ↓ pool (last-step | mean | last-hidden)
-    Pooled (B, 2*hidden)
-      ↓ Linear(2*hidden -> head_dim) + GELU + Dropout
-      ↓ Linear(head_dim -> 1)
-    Logit (B, 1)
-      ↓ squeeze + sigmoid (in `forward`)
-    Focus score (B,)
-
-Default hyperparameters target the v1 design in
-`docs/architecture/pipeline_overview.md` and `docs/phase_c/temporal_models.md`.
+The model takes a sequence of feature rows with shape (B, T, F) and returns
+one focus score per window.
 """
 
 from __future__ import annotations
@@ -42,11 +17,9 @@ logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn as nn
-
 from fatigue_pipeline.constants import FEATURE_DIM
 
 PoolMode = Literal["last", "mean", "hidden"]
-
 
 class BiGRUTemporalModel(nn.Module):
     """BiGRU + small MLP head, single sigmoid output."""
@@ -90,28 +63,24 @@ class BiGRUTemporalModel(nn.Module):
         )
 
     def _pool(self, gru_out: torch.Tensor, h_n: torch.Tensor) -> torch.Tensor:
-        """Reduce the BiGRU output to a single (B, 2*hidden) vector.
-
-        - "last":   last timestep of the sequence (default; cheap and effective
-                    for fixed-length windows where the most recent state
-                    carries the strongest fatigue signal).
-        - "mean":   mean across timesteps, robust to noisy spikes near the end.
-        - "hidden": concat forward+backward last-layer hidden states from h_n.
+        """
+        Collapse the sequence output into one vector per window
         """
         if self.pool == "last":
             return gru_out[:, -1, :]
         if self.pool == "mean":
             return gru_out.mean(dim=1)
         if self.pool == "hidden":
-            # h_n shape: (num_layers * 2, B, hidden_dim). Reshape so the
-            # bidirection axis is explicit, then take the final layer.
+            # h_n is grouped by layer and direction. Take the final layer
             h = h_n.view(self.num_layers, 2, -1, self.hidden_dim)[-1]
             forward, backward = h[0], h[1]
             return torch.cat([forward, backward], dim=-1)
         raise ValueError(f"Unknown pool mode: {self.pool!r}")
 
     def forward_logits(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the raw pre-sigmoid logit, shape (B,)."""
+        """
+        Return the raw pre-sigmoid logit, shape (B,)
+        """
         if x.ndim != 3:
             raise ValueError(f"Expected (B, T, F), got {tuple(x.shape)}")
         if x.size(-1) != self.input_dim:
@@ -126,7 +95,9 @@ class BiGRUTemporalModel(nn.Module):
         return logit.squeeze(-1)  # (B,)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the focus score in (0, 1), shape (B,)."""
+        """
+        Return the focus score in (0, 1), shape (B,)
+        """
         return torch.sigmoid(self.forward_logits(x))
 
     @torch.no_grad()
@@ -144,7 +115,9 @@ def build_temporal_model(
     sequence_dropout: float = 0.0,
     pool: PoolMode = "last",
 ) -> BiGRUTemporalModel:
-    """Construct a fresh BiGRUTemporalModel with the v1 defaults."""
+    """
+    Create a BiGRU temporal model with the default settings
+    """
     return BiGRUTemporalModel(
         input_dim=input_dim,
         hidden_dim=hidden_dim,
@@ -158,13 +131,16 @@ def build_temporal_model(
 
 
 def infer_temporal_kwargs_from_state(state: dict[str, Any]) -> dict[str, Any]:
-    """Recover layer counts and widths from a checkpoint (no dropout keys)."""
+    """
+    Infer the model size from checkpoint weights
+    """
     layer_idxs: list[int] = []
     for key in state:
         match = re.match(r"gru\.weight_ih_l(\d+)$", key)
         if match:
             layer_idxs.append(int(match.group(1)))
 
+    # GRU weight names include the layer index
     w_ih = state["gru.weight_ih_l0"]
     hidden_dim = int(w_ih.shape[0]) // 3
     head_dim = int(state["head.0.weight"].shape[0])
@@ -182,7 +158,9 @@ def load_temporal_checkpoint(
     *,
     config_path: str | Path | None = None,
 ) -> BiGRUTemporalModel:
-    """Load weights; optional ``model_config.json`` beside the checkpoint."""
+    """
+    Load a saved temporal model checkpoint
+    """
     weights_path = Path(weights_path)
     state = torch.load(weights_path, map_location=device, weights_only=True)
 

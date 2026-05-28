@@ -1,19 +1,7 @@
-"""Train the BiGRU temporal model on aggregated feature windows.
+"""
+Train the BiGRU temporal model on aggregated feature windows.
 
-Pipeline:
-
-    Stage 2 feature Parquets (per-second steps, one per video)
-        ↓ TemporalWindowDataset (slides 60-step windows, drops invalid steps)
-        ↓ split by VIDEO (not by window) into train / val
-        ↓ per-feature normalization fit on train, applied to both
-        ↓ BiGRUTemporalModel + AdamW + Cosine LR + MSE on focus score
-        ↓ best checkpoint by val MSE -> runs/temporal/best.pt
-        ↓ training_history.csv + training_curves.png (train/val MSE per epoch)
-
-Labels are bootstrapped from the features themselves so v1 needs no human
-annotation. Replace the dataset's `label_fn` once real labels exist.
-
-Run:
+Usage:
     python -m model_architecture.train_temporal_model
 """
 
@@ -60,15 +48,15 @@ LR_MIN = 1e-6
 GRAD_CLIP_NORM = 1.0
 
 WINDOW_STEPS = DEFAULT_WINDOW_STEPS
-TRAIN_WINDOW_STRIDE = 5  # fewer overlapping train windows (less memorization)
+TRAIN_WINDOW_STRIDE = 5  # fewer overlapping train windows
 VAL_WINDOW_STRIDE = DEFAULT_WINDOW_STRIDE
 VAL_FRACTION = DEFAULT_VAL_FRACTION
 SEED = DEFAULT_SEED
 
-# Input noise on normalized features (train only).
+# Input noise on normalized features (train only)
 FEATURE_NOISE_STD = 0.05
 
-# Model regularization (passed to build_temporal_model; saved in model_config.json).
+# Model regularization
 HIDDEN_DIM = 64
 NUM_LAYERS = 2
 GRU_DROPOUT = 0.25
@@ -77,14 +65,11 @@ HEAD_DROPOUT = 0.35
 SEQUENCE_DROPOUT = 0.25
 POOL = "mean"
 
-NUM_WORKERS = 0  # 0 keeps everything in the main process; bump on Linux
-
+NUM_WORKERS = 0
 
 # =============================================================================
 # Train / eval loop
 # =============================================================================
-
-
 def run_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -94,7 +79,6 @@ def run_epoch(
     *,
     feature_noise_std: float = 0.0,
 ) -> float:
-    """One pass over `loader`. Trains when `optimizer` is provided."""
     is_train = optimizer is not None
     model.train(is_train)
 
@@ -125,7 +109,6 @@ def run_epoch(
 
     return total_loss / max(1, total_items)
 
-
 def _model_config() -> dict:
     return {
         "hidden_dim": HIDDEN_DIM,
@@ -136,7 +119,6 @@ def _model_config() -> dict:
         "sequence_dropout": SEQUENCE_DROPOUT,
         "pool": POOL,
     }
-
 
 def _plot_loss_curves(
     train_losses: list[float],
@@ -166,10 +148,8 @@ def _plot_loss_curves(
     plt.close(fig)
     print(f"Loss curves saved to {save_path}")
 
-
 def _save_history(history: list[dict], path: Path) -> None:
     pd.DataFrame(history).to_csv(path, index=False)
-
 
 def main() -> None:
     torch.manual_seed(SEED)
