@@ -7,7 +7,9 @@ data/temporal/ <- FatigueSense/temporal_dataset
 
 Usage:
     python -m scripts.download_hf_datasets
-    python -m scripts.download_hf_datasets --binary --pose
+    python -m scripts.download_hf_datasets --binary
+    python -m scripts.download_hf_datasets --pose
+    python -m scripts.download_hf_datasets --temporal
     python -m scripts.download_hf_datasets --dry-run
     python -m scripts.download_hf_datasets --force
 """
