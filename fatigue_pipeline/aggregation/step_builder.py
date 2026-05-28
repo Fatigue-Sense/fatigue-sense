@@ -1,21 +1,11 @@
-"""Pure aggregation: per-frame probs in one sub-window -> one StepFeatures.
-
-Shared by live inference (``FeatureAggregator``) and the offline Stage 2
-dataset builder, so the same numbers train the model and run in
-production. No state, no side effects.
-
-The ``FeatureAggregator`` orchestrator overrides the rate + mean-duration
-fields with edge-triggered values from the Schmitt detector path; the
-run-length counting below is the offline / standalone fallback.
+"""
+Turns one window of per-frame probabilities into a single StepFeatures row.
 """
 
 from __future__ import annotations
-
 import warnings
 from dataclasses import dataclass
-
 import numpy as np
-
 from fatigue_pipeline.aggregation.step_features import StepFeatures
 from fatigue_pipeline.constants import (
     EYE_CLOSED_THRESH,
@@ -24,31 +14,26 @@ from fatigue_pipeline.constants import (
     SECONDS_PER_MINUTE,
 )
 
-
 @dataclass
 class _SignalStats:
-    """Generic stats for a 1-D probability signal over a sub-window."""
-
+    """Generic stats for a 1-D probability signal over a sub-window"""
     valid_frac: float
-    coverage_ratio: float       # fraction of frames where signal > threshold
-    event_rate_per_min: float   # number of contiguous-True runs, scaled to bpm
+    coverage_ratio: float
+    event_rate_per_min: float
     mean_event_duration_s: float
     variance: float
     mean_value: float
 
-
 def _run_lengths(mask: np.ndarray) -> np.ndarray:
-    """Lengths of every contiguous-True run in a 1-D bool array."""
+    """Return the lengths of all True runs in a 1-D boolean array"""
     if mask.size == 0:
         return np.array([], dtype=np.int32)
-    # Pad with False on both ends so a run that touches the edge still
-    # produces a clean rising and falling transition in the diff.
+    # Add False at both ends so runs at the start or end of the window are still counted cleanly
     padded = np.concatenate(([False], mask.astype(bool), [False]))
     diff = np.diff(padded.astype(np.int8))
     starts = np.where(diff == 1)[0]
     ends = np.where(diff == -1)[0]
     return ends - starts
-
 
 def _aggregate_signal(
     signal: np.ndarray,
@@ -94,12 +79,10 @@ def compute_step_features(
     p_mouth_open: np.ndarray,
     fps: float,
 ) -> StepFeatures:
-    """Aggregate one rolling sub-window of per-frame probs into one step."""
+    """Aggregate one rolling sub-window of per-frame probs into one step"""
     n_frames = len(p_eye_left)
     sub_window_s = n_frames / fps if fps > 0 else 1.0
 
-    # nanmean tolerates one-eye-only frames. Silence all-NaN warning - the
-    # downstream ``valid`` flag already gates these out.
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"Mean of empty slice", RuntimeWarning)
         eye_signal = np.nanmean(np.vstack([p_eye_left, p_eye_right]), axis=0)
@@ -114,8 +97,7 @@ def compute_step_features(
         threshold=MOUTH_OPEN_THRESH,
     )
 
-    # A step is "valid" only when BOTH signals had enough non-NaN coverage.
-    # The temporal model expects all 9 features populated to use a step.
+    # A step is only valid if both eye and mouth signals have enough real values
     valid = (
         eye_stats.valid_frac >= MIN_VALID_FRACTION
         and mouth_stats.valid_frac >= MIN_VALID_FRACTION

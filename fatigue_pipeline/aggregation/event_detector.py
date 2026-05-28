@@ -1,32 +1,25 @@
-"""Schmitt-trigger edge detection for one probability signal.
+"""
+Detects when a probability signal crosses a threshold and counts each event once.
 
-Counts each "above-threshold" run exactly once. Hysteresis (separate
-rising/falling thresholds) avoids flutter near the decision boundary;
-a minimum duration filter discards spikes that aren't real events.
+This uses a Schmitt trigger, meaning the signal has to rise above one threshold
+to start an event and fall below another threshold to end it. That small gap helps
+avoid rapid on/off switching when the value is hovering near the boundary.
 
-Used to count blinks (eye-closed signal) and yawns (mouth-open signal).
-A new signal (e.g. head-pose) plugs in by instantiating one more
-``SchmittDetector`` with its own thresholds.
+Very short events are ignored so brief spikes do not get counted.
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-
 import numpy as np
-
 
 @dataclass(frozen=True)
 class CompletedEvent:
-    """One edge-detected event that finished on the latest update."""
-
     end_frame: int
     duration_frames: int
 
 
+"""Detects threshold-crossing events frame by frame."""
 class SchmittDetector:
-    """Frame-level edge detector with hysteresis + min-duration gate."""
-
     def __init__(
         self,
         rising: float,
@@ -54,8 +47,8 @@ class SchmittDetector:
         self._run_start_frame = 0
         self._count = 0
 
+    # Add one new sample and return an event if one just ended
     def update(self, value: float, frame_idx: int) -> CompletedEvent | None:
-        """Push one sample. Returns a CompletedEvent on falling edge."""
         if np.isnan(value):
             return None
 
@@ -83,10 +76,4 @@ class SchmittDetector:
 
     @property
     def active(self) -> bool:
-        """True while a candidate event is currently in progress.
-
-        Flips True on the rising crossing, flips False on the falling
-        crossing (regardless of whether ``min_duration_s`` was met -
-        gating happens at the falling edge inside ``update()``).
-        """
         return self._active

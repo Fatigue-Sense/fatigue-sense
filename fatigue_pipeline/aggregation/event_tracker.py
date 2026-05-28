@@ -1,28 +1,12 @@
-"""Windowed event bookkeeping for a single signal.
-
-Sits on top of a ``SchmittDetector``. Owns:
-
-- cumulative count snapshots aligned to the sub-window
-- in-window event list (for mean duration)
-- rate-per-minute computation
-- pruning of events that fell out of the window
-
-Why split from the detector: the detector is stateless w.r.t. windowing.
-This class is where the "events ending in the last N frames" view lives.
+"""
+Keeps track of recent events for one signal.
 """
 
 from __future__ import annotations
-
 from collections import deque
-
 import numpy as np
-
-from fatigue_pipeline.aggregation.event_detector import (
-    CompletedEvent,
-    SchmittDetector,
-)
+from fatigue_pipeline.aggregation.event_detector import (CompletedEvent, SchmittDetector)
 from fatigue_pipeline.constants import SECONDS_PER_MINUTE
-
 
 class WindowEventTracker:
     def __init__(

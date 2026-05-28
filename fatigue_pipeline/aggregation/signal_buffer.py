@@ -1,15 +1,10 @@
-"""Fixed-length ring buffer for one per-frame signal.
-
-Stage-1 NaN policy: missing detection becomes NaN, never zero.
-Snapshot returns a numpy view sized to the sub-window.
+"""
+Keeps a fixed-size history for one per-frame signal.
 """
 
 from __future__ import annotations
-
 from collections import deque
-
 import numpy as np
-
 
 class SignalBuffer:
     def __init__(self, capacity: int) -> None:

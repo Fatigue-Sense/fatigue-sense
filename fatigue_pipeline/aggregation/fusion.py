@@ -1,15 +1,13 @@
-"""NaN-tolerant signal fusion."""
-
 from __future__ import annotations
-
 import numpy as np
 
-
 def bilateral_mean(left: float, right: float) -> float:
-    """Mean of left + right, tolerating NaN on either side.
+    """
+    Combine the left and right values into a single average.
 
-    Both NaN -> NaN. One NaN -> the other value. Used to fuse left/right
-    eye-closed probabilities into one bilateral eye signal.
+    If one side is missing, use the other side instead. If both sides are
+    missing, return NaN. This is used to turn the left/right eye-closed
+    probabilities into one combined eye signal.
     """
     if np.isnan(left) and np.isnan(right):
         return float("nan")

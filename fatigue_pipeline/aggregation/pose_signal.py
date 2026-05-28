@@ -1,30 +1,21 @@
-"""Per-frame upper-body keypoint buffer + window aggregation.
+"""
+Stores recent upper-body keypoints and turns them into window-level pose features.
 
-Mirrors ``SignalBuffer`` but stores ``(POSE_NUM_KPTS, 3)`` arrays per
-frame instead of scalars. Window aggregation produces eight pose-derived
-temporal features that ride alongside the existing 9-D eye/mouth vector:
+For each window, it calculates eight pose-related features that are added to the
+existing eye and mouth features:
 
-    head_pitch          per-frame mean: (nose_y - mid_shoulder_y) / sh_width
-    head_roll           per-frame mean: atan2(ear_dy, |ear_dx|)
-    shoulder_tilt       per-frame mean: atan2(sh_dy, |sh_dx|)
-    head_size_ratio     per-frame mean: ear_distance / sh_width
-    head_motion_energy  window mean: |delta nose_xy| / sh_width
-    head_drift_y        window std:  nose_y / sh_width
-    posture_drift       window std:  mid_shoulder_y / sh_width
-    kpt_visibility      window mean: per-frame mean conf across kpts
-
-``head_roll`` and ``shoulder_tilt`` use ``atan2(dy, |dx|)`` rather than
-the raw signed ``atan2(dy, dx)``. That keeps both angles in
-``(-pi/2, pi/2)`` with 0 == level, eliminating the +-pi wrap-around
-discontinuity a signed ``dx`` produces when the subject faces the
-camera (subject's right shoulder/ear sits at the lower image x, so
-``dx`` is negative and the raw angle hovers near +-pi for a level
-pose - the wrap would jump a tiny posture change across the full
-angular range).
+    head_pitch: average nose position relative to the shoulders
+    head_roll: average left/right head tilt
+    shoulder_tilt: average shoulder tilt
+    head_size_ratio: average ear distance relative to shoulder width
+    head_motion_energy: average frame-to-frame nose movement
+    head_drift_y: vertical head movement over the window
+    posture_drift: vertical shoulder movement over the window
+    kpt_visibility: average keypoint confidence
 
 When window visibility is too low (mean conf < POSE_MIN_VISIBILITY) the
 pose features collapse to zero so the BiGRU sees a "pose unobserved"
-signature instead of noisy garbage.
+signature instead of noisy garbage
 """
 
 from __future__ import annotations
@@ -41,8 +32,7 @@ from fatigue_pipeline.constants import (
     POSE_NUM_KPTS,
 )
 
-# Index aliases into UPPER_BODY_KPT_INDICES order (matches constants list).
-# Eyes were dropped from the persisted subset; no current feature used them.
+# Index aliases into UPPER_BODY_KPT_INDICES order 
 NOSE = 0
 EAR_L = 1
 EAR_R = 2
@@ -73,10 +63,8 @@ _ZERO_FEATURES = PoseFeatures(
     kpt_visibility=0.0,
 )
 
-
+"""Keeps a rolling window of upper-body keypoints."""
 class PoseSignalBuffer:
-    """Ring buffer of per-frame upper-body kpt arrays."""
-
     def __init__(self, capacity: int) -> None:
         self._buf: deque[np.ndarray] = deque(maxlen=capacity)
         self._capacity = capacity
@@ -100,8 +88,8 @@ class PoseSignalBuffer:
                 )
         self._buf.append(kpts)
 
+    # Function to return the current keypoint window as a stacked array
     def snapshot(self) -> np.ndarray:
-        """Return ``(T, POSE_NUM_KPTS, 3)`` stacked window."""
         if not self._buf:
             return np.empty((0, POSE_NUM_KPTS, POSE_KPT_DIM), dtype=np.float32)
         return np.stack(self._buf, axis=0)
@@ -115,7 +103,7 @@ class PoseSignalBuffer:
 
 
 def _safe_atan2(y: np.ndarray, x: np.ndarray) -> np.ndarray:
-    """atan2 that returns NaN where either input is NaN."""
+    """atan2 that returns NaN where either input is NaN"""
     out = np.full_like(y, np.nan, dtype=np.float32)
     valid = ~(np.isnan(y) | np.isnan(x))
     out[valid] = np.arctan2(y[valid], x[valid]).astype(np.float32)
@@ -123,21 +111,12 @@ def _safe_atan2(y: np.ndarray, x: np.ndarray) -> np.ndarray:
 
 
 def _level_angle(dy: np.ndarray, dx: np.ndarray) -> np.ndarray:
-    """Angle of the (dx, dy) line relative to the horizontal axis.
-
-    Returns values in ``(-pi/2, pi/2)`` with 0 = horizontal regardless of
-    which side of the image the two anchor points sit on. Used for
-    ``head_roll`` and ``shoulder_tilt`` so a level pose maps to 0 instead
-    of +-pi (which would wrap discontinuously for tiny posture changes).
-    """
     return _safe_atan2(dy, np.abs(dx) + 1e-6)
 
 
 def compute_pose_features(window: np.ndarray) -> PoseFeatures:
-    """Aggregate a ``(T, POSE_NUM_KPTS, 3)`` window into 8 features.
-
-    Missing kpts (NaN x/y) are skipped via nan-aware reductions. If the
-    window is empty or visibility too low, returns zeros.
+    """
+    Convert a window of keypoints into the eight pose features
     """
     if window.size == 0 or window.shape[0] == 0:
         return _ZERO_FEATURES
@@ -145,8 +124,7 @@ def compute_pose_features(window: np.ndarray) -> PoseFeatures:
     xy = window[..., :2]
     conf = window[..., 2]
 
-    # nan-aware reductions warn on all-NaN slices; the early return below
-    # already handles the "no usable pose data" case, silence the noise.
+    # nan-aware reductions warn on all-NaN slices
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"Mean of empty slice", RuntimeWarning)
         warnings.filterwarnings(
@@ -166,7 +144,7 @@ def _compute_pose_features_inner(xy: np.ndarray, conf: np.ndarray) -> PoseFeatur
             **{**_ZERO_FEATURES.__dict__, "kpt_visibility": visibility}
         )
 
-    # Per-frame derived signals -------------------------------------------
+    # Per-frame derived signals
     nose_x = xy[:, NOSE, 0]
     nose_y = xy[:, NOSE, 1]
     sh_l = xy[:, SHOULDER_L, :]
@@ -178,7 +156,7 @@ def _compute_pose_features_inner(xy: np.ndarray, conf: np.ndarray) -> PoseFeatur
     sh_dx = sh_r[:, 0] - sh_l[:, 0]
     sh_dy = sh_r[:, 1] - sh_l[:, 1]
     sh_width = np.sqrt(sh_dx**2 + sh_dy**2).astype(np.float32)
-    # Guard divide-by-zero / tiny widths; treat as missing.
+    # Guard divide-by-zero / tiny widths
     sh_width[sh_width < 1.0] = np.nan
 
     ear_dx = ear_r[:, 0] - ear_l[:, 0]
