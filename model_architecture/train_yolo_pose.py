@@ -68,6 +68,17 @@ def _disable_remote_logging(settings) -> None:
     )
 
 
+def _materialize_dataset_yaml() -> Path:
+    import yaml
+
+    src = DATA_YAML.resolve()
+    data = yaml.safe_load(src.read_text())
+    data["path"] = str(src.parent).replace("\\", "/")
+    out = src.with_name("dataset.runtime.yaml")
+    out.write_text(yaml.safe_dump(data, sort_keys=False))
+    return out
+
+
 def _find_last_checkpoint() -> Path | None:
     """
     Find the newest saved checkpoint for this run
@@ -182,6 +193,8 @@ def main(argv: list[str] | None = None) -> None:
             f"{DATA_YAML} not found - run scripts/pose/pseudo_label.py first."
         )
 
+    data_yaml = _materialize_dataset_yaml()
+
     if args.resume:
         ckpt = _find_last_checkpoint()
         if ckpt is None:
@@ -197,7 +210,7 @@ def main(argv: list[str] | None = None) -> None:
         # Build a fresh 5-kpt head, warm-start everything else from COCO
         model = YOLO(ARCH_YAML).load(PRETRAINED)
         results = model.train(
-            data=str(DATA_YAML),
+            data=str(data_yaml),
             epochs=EPOCHS,
             batch=BATCH,
             imgsz=IMGSZ,
@@ -214,7 +227,7 @@ def main(argv: list[str] | None = None) -> None:
     save_dir = Path(results.save_dir)
     _export_training_artifacts(save_dir)
 
-    metrics = model.val(data=str(DATA_YAML), device=DEVICE)
+    metrics = model.val(data=str(data_yaml), device=DEVICE)
     print(f"Validation metrics:\n{metrics}")
 
     best = save_dir / "weights" / "best.pt"
