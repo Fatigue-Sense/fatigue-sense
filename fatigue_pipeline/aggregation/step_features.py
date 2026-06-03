@@ -28,7 +28,7 @@ class StepFeatures:
     valid: bool = False
 
     def to_array(self) -> np.ndarray:
-        """Return the 9-dim feature vector (excludes the ``valid`` flag)."""
+        """Return the 17-dim feature vector (excludes the ``valid`` flag)."""
         return np.asarray(
             [getattr(self, name) for name in FEATURE_NAMES],
             dtype=np.float32,
