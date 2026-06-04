@@ -265,7 +265,7 @@ class MediaPipeRegionExtractor:
 
 
 if __name__ == "__main__":
-    MODEL_PATH = Path(__file__).resolve().parent / "models" / "face_landmarker.task"
+    MODEL_PATH = Path(__file__).resolve().parents[3] / "face_landmarker.task"
     if not MODEL_PATH.exists():
         print(f"Update MODEL_PATH in __main__ test block. Missing: {MODEL_PATH}")
         raise SystemExit(1)

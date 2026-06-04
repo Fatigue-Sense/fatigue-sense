@@ -5,7 +5,7 @@ from typing import Optional
 import cv2
 import csv
 
-from vision_pipeline.labelling.mediapipe_labelling import MediaPipeRegionExtractor
+from mediapipe_labelling import MediaPipeRegionExtractor
 
 
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
@@ -248,7 +248,7 @@ def process_videos_in_directory(
 
 
 if __name__ == "__main__":
-    MODEL_PATH = Path("vision_pipeline/models/face_landmarker.task")
+    MODEL_PATH = Path("face_landmarker.task")
     VIDEOS_DIR = Path("videos")
     OUTPUT_ROOT = Path("dataset")
 
