@@ -173,7 +173,7 @@ def _compute_pose_features_inner(xy: np.ndarray, conf: np.ndarray) -> PoseFeatur
     shoulder_tilt = float(np.nanmean(shoulder_tilt_per_frame))
     head_size_ratio = float(np.nanmean(head_size_per_frame))
 
-    # Window-level motion + drift -----------------------------------------
+    # Window-level motion and drift
     nose_x_norm = nose_x / sh_width
     nose_y_norm = nose_y / sh_width
     mid_sh_y_norm = mid_sh_y / sh_width

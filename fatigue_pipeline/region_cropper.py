@@ -57,6 +57,7 @@ class RegionCropper:
         self.frame_idx = 0
         self.fps = fps if fps and fps > 0 else DEFAULT_FPS
 
+        # load the model face_landmarker.task
         base_options = mp.tasks.BaseOptions(model_asset_path=str(self.model_path))
         options = vision.FaceLandmarkerOptions(
             base_options=base_options,

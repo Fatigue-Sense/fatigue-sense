@@ -49,19 +49,33 @@ class FeatureAggregator:
         sub_window_s: float = DEFAULT_SUB_WINDOW_S,
         step_stride_s: float = DEFAULT_STEP_STRIDE_S,
     ) -> None:
+        """
+        Initialise rolling feature aggregation
+
+        Args:
+            fps: Source frame rate used to convert durations into frame counts
+            sub_window_s: duration of the rolling buffer window in seconds
+            step_stride_s: time between emitted feature rows in second
+        """
+
         self.sub_window_s = sub_window_s
         self.step_stride_s = step_stride_s
         self.fps = fps if fps and fps > 0 else DEFAULT_FPS
 
+        # convert the time-based window settings into frame counts for buffering and emission
         sub_window_frames = _frames_for(self.sub_window_s, self.fps)
         stride_frames = _frames_for(self.step_stride_s, self.fps)
 
+        # Initialise rolling buffers that score the latest window of input signals
         self._eye_l = SignalBuffer(sub_window_frames)
         self._eye_r = SignalBuffer(sub_window_frames)
         self._mouth = SignalBuffer(sub_window_frames)
         self._pose = PoseSignalBuffer(sub_window_frames)
+
+        # timestamp of the most recently processed frame
         self._timestamp: float = 0.0
 
+        # Use separate start and end thresholds to avoid error prediction in blink and yawn
         self._blink_detector = SchmittDetector(
             rising=EYE_RISING_THRESH,
             falling=EYE_FALLING_THRESH,
@@ -74,6 +88,7 @@ class FeatureAggregator:
             min_duration_s=MIN_YAWN_DURATION_S,
             fps=self.fps,
         )
+
         self._blink_tracker = WindowEventTracker(
             detector=self._blink_detector,
             sub_window_frames=sub_window_frames,
@@ -84,11 +99,12 @@ class FeatureAggregator:
             sub_window_frames=sub_window_frames,
             sub_window_s=self.sub_window_s,
         )
+
+        # Emit features only after 60s (1800 frames) window is full 
         self._gate = StrideGate(sub_window_frames, stride_frames)
 
         self._step_idx = 0
 
-    # ---- lifecycle ----
 
     def reset(self, fps: float | None = None) -> None:
         """
@@ -96,6 +112,7 @@ class FeatureAggregator:
         """
         if fps is not None and fps > 0:
             self.fps = fps
+            # Frame-based window sizes change when a new clip uses a new FPS
             self._reconfigure_for_fps()
         else:
             self._eye_l.clear()
@@ -116,7 +133,15 @@ class FeatureAggregator:
     def add(self, probs: FrameProbs) -> FeatureStep | None:
         """
         Add one frame of probabilities and return a feature step when ready
+
+        Args: 
+            Probs: Per-frame probabilities, keypoints, and timestamp to add to the rolling buffer
+        
+        Returns:
+            A feature step when enough frames have been collected and the stride interval is reached, otherwise, None
         """
+
+        # Push the raw signals into the rolling buffers
         eye_l = self._eye_l.push(probs.p_eye_left_closed)
         eye_r = self._eye_r.push(probs.p_eye_right_closed)
         mouth = self._mouth.push(probs.p_mouth_open)
@@ -125,12 +150,15 @@ class FeatureAggregator:
 
         frame_idx = self._gate.frames_seen + 1  # 1-indexed for event timing
 
+        # Advance the event detector
         self._blink_tracker.update(bilateral_mean(eye_l, eye_r), frame_idx)
         self._yawn_tracker.update(mouth, frame_idx)
 
+        # return none if complete window is not available
         if not self._gate.tick():
             return None
 
+        # Compute the eye and mouth features from the current rolling buffer
         features = compute_step_features(
             self._eye_l.snapshot(),
             self._eye_r.snapshot(),
@@ -138,13 +166,13 @@ class FeatureAggregator:
             fps=self.fps,
         )
 
-        # Use the edge detectors for event rate and duration so overlapping windows
-        # do not count the same blink or yawn more than once.
+        # Use the edge detectors for event rate and duration so overlapping windows do not count the same blink or yawn more than once
         features.blink_rate_bpm = self._blink_tracker.rate_per_min(frame_idx)
         features.yawn_rate_per_min = self._yawn_tracker.rate_per_min(frame_idx)
         features.mean_blink_duration = self._blink_tracker.mean_duration_s(self.fps)
         features.mean_yawn_duration = self._yawn_tracker.mean_duration_s(self.fps)
 
+        # Compute the pose features 
         pose = compute_pose_features(self._pose.snapshot())
         features.head_pitch = pose.head_pitch
         features.head_roll = pose.head_roll

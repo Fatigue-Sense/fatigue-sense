@@ -19,7 +19,10 @@ class WindowEventTracker:
         self.sub_window_frames = sub_window_frames
         self.sub_window_s = sub_window_s
 
+        # Store the running event count at each frame
         self._count_history: deque[int] = deque(maxlen=sub_window_frames)
+
+        # keep completed events in the current window for duration statistics
         self._events: deque[CompletedEvent] = deque()
 
     def reconfigure(self, sub_window_frames: int, sub_window_s: float) -> None:
@@ -33,6 +36,9 @@ class WindowEventTracker:
         self._events.clear()
 
     def update(self, value: float, frame_idx: int) -> None:
+        """
+            update detection state and record any event completed on current frame
+        """
         event = self.detector.update(value, frame_idx)
         if event is not None:
             self._events.append(event)
@@ -52,6 +58,9 @@ class WindowEventTracker:
         return float(in_window * SECONDS_PER_MINUTE / self.sub_window_s)
 
     def mean_duration_s(self, fps: float) -> float:
+        """
+            Return the mean duration of completed events in the current window
+        """
         if not self._events:
             return 0.0
         durations = [e.duration_frames for e in self._events]

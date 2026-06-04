@@ -18,8 +18,10 @@ class CompletedEvent:
     duration_frames: int
 
 
-"""Detects threshold-crossing events frame by frame."""
 class SchmittDetector:
+    """
+    Detects threshold-crossing events frame by frame
+    """
     def __init__(
         self,
         rising: float,
@@ -31,6 +33,7 @@ class SchmittDetector:
             raise ValueError(
                 f"rising ({rising}) must be >= falling ({falling})"
             )
+        
         self.rising = rising
         self.falling = falling
         self.min_duration_s = min_duration_s
@@ -49,18 +52,32 @@ class SchmittDetector:
 
     # Add one new sample and return an event if one just ended
     def update(self, value: float, frame_idx: int) -> CompletedEvent | None:
+        """
+        Process one probability value and return an event when one is completed
+
+        Args:
+            value: probability vlaue for the current frame
+            frame_idx: Index of the current pygame.sprite.get_sprites_from_layer()
+
+        Returns:
+            A completed event if an event has just ended, otherwise, None
+        """
         if np.isnan(value):
             return None
 
+        # start tracking once the signal crosses the upper threshold
         if not self._active and value > self.rising:
             self._active = True
             self._run_start_frame = frame_idx
             return None
-
+        
+        # Finish the event only after the signal drops below the lower threshold
         if self._active and value < self.falling:
             duration_frames = frame_idx - self._run_start_frame
             duration_s = duration_frames / self.fps
             self._active = False
+
+            # Ignore false blinking/yawning
             if duration_s >= self.min_duration_s:
                 self._count += 1
                 return CompletedEvent(

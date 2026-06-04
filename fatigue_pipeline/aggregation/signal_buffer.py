@@ -12,6 +12,7 @@ class SignalBuffer:
         self._capacity = capacity
 
     def reconfigure(self, capacity: int) -> None:
+        # Start a frsh history when the required window size change
         self._buf = deque(maxlen=capacity)
         self._capacity = capacity
 
