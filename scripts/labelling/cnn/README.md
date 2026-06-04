@@ -5,6 +5,16 @@ CNN classifiers. MediaPipe face landmarks are used to crop the left eye, right
 eye, and mouth from each sampled frame, and the crops are auto-labelled
 `open` / `closed` from the Eye Aspect Ratio (EAR) and Mouth Aspect Ratio (MAR).
 
+> **This is the Phase A dataset preparation method.** It documents how the CNN
+> training data was built from the raw videos we collected (see the
+> [labelling README](../README.md) for the Google Drive link to those videos).
+> Assuming you have access to the raw videos, running this should reproduce the
+> same dataset published as
+> [`FatigueSense/binary_classifier_dataset`](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset)
+> on Hugging Face. If you only need the prepared dataset (not the raw videos),
+> download it directly via `scripts/download_hf_datasets.py` instead of running
+> this pipeline.
+
 ## Files
 
 | File | Role |
