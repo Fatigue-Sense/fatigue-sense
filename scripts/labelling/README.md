@@ -37,7 +37,16 @@ Use `python -m scripts.labelling.<folder>.<script>` so imports resolve correctly
 2. **Pose** if you are retraining the upper-body pose model.
 3. **Temporal** after CNN + pose weights are available (defaults pull from Hugging Face via `scripts/weights_path.py`).
 
+Outputs align with [docs/training.md](../../docs/training.md) layouts:
+
+| Subfolder | Default output |
+|-----------|----------------|
+| `cnn/` | `data/binary/train/` |
+| `pose/` | `data/pose/` |
+| `temporal/` | `data/temporal/raw_probs/`, `data/temporal/features/` |
+
 Training entry points (not in this folder):
 
+- `python -m model_architecture.train_binary_classifier --roi eyes|mouth`
 - `python -m model_architecture.train_yolo_pose`
 - `python -m model_architecture.train_temporal_model`

@@ -159,7 +159,11 @@ def main() -> None:
 
     paths = sorted(FEATURES_DIR.glob("*.parquet"))
     if not paths:
-        raise FileNotFoundError(f"No feature Parquet files in {FEATURES_DIR}")
+        raise FileNotFoundError(
+            f"No feature Parquet files in {FEATURES_DIR}. "
+            "Run scripts.download_hf_datasets --temporal or build features with "
+            "scripts.labelling.temporal (see docs/training.md)."
+        )
 
     train_paths, val_paths = split_videos(
         paths, val_fraction=VAL_FRACTION, seed=SEED

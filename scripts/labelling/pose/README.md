@@ -4,6 +4,9 @@ Builds a YOLO11n-pose dataset for the five upper-body keypoints used at
 runtime (nose, left/right ear, left/right shoulder). Draft labels come from
 the stock COCO `yolo11n-pose.pt` model; fix errors in CVAT before training.
 
+Alternative: download `data/pose/` from Hugging Face via
+`scripts.download_hf_datasets --pose` (see [docs/training.md](../../../docs/training.md)).
+
 ## Pipeline
 
 ```text

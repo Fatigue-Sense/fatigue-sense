@@ -5,6 +5,8 @@ data/binary/   <- FatigueSense/binary_classifier_dataset (dataset_split.zip)
 data/pose/     <- FatigueSense/pose_dataset
 data/temporal/ <- FatigueSense/temporal_dataset
 
+To build the same layouts from raw videos instead, see scripts/labelling/README.md.
+
 Usage:
     python -m scripts.download_hf_datasets
     python -m scripts.download_hf_datasets --binary

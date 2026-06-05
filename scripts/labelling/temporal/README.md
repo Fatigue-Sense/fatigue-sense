@@ -1,8 +1,11 @@
 # Temporal model dataset preparation
 
 Builds the offline inputs for the BiGRU focus-score model: per-frame CNN/pose
-outputs, then per-second engineered features. **Window labels are not written
-here** - training uses bootstrap targets from
+outputs, then per-second engineered features. Alternative: download
+`data/temporal/` from Hugging Face via `scripts.download_hf_datasets --temporal`
+(see [docs/training.md](../../../docs/training.md)).
+
+**Window labels are not written here** - training uses bootstrap targets from
 `model_architecture.dataset.temporal_window_dataset.default_label_from_window`
 when you run `train_temporal_model`.
 

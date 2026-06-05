@@ -13,7 +13,7 @@ if str(_REPO_ROOT) not in sys.path:
 from scripts.weights_path import LANDMARKER_PATH  # noqa: E402
 
 DEFAULT_VIDEOS_DIR = _REPO_ROOT / "videos"
-DEFAULT_OUTPUT_ROOT = _REPO_ROOT / "dataset"
+DEFAULT_OUTPUT_ROOT = _REPO_ROOT / "data" / "binary" / "train"
 
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
 

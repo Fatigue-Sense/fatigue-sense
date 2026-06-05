@@ -38,11 +38,17 @@ fatigue-sense/
 ├── model_architecture/       # Models + training scripts
 ├── scripts/
 │   ├── weights_path.py           # All checkpoint paths (edit here)
+│   ├── download_hf_datasets.py   # Pull published train data from Hugging Face
 │   ├── live_inference_local.py   # Full pipeline webcam demo
 │   ├── vision_pipeline.py        # Eyes + mouth only
-│   └── pose_pipeline.py          # Upper-body pose only
+│   ├── pose_pipeline.py          # Upper-body pose only
+│   └── labelling/                # Build datasets from raw videos (see below)
+│       ├── cnn/                  # Eye/mouth ROI crops (EAR/MAR weak labels)
+│       ├── pose/                 # YOLO pose frames + pseudo-labels
+│       └── temporal/             # Per-frame probs + 1 Hz feature Parquets
+├── notebooks/                    # eval_cnn.ipynb, eval_pose.ipynb
 ├── docs/
-│   └── training.md           # HF datasets, train commands, step order
+│   └── training.md           # HF download, labelling pipelines, train commands
 └── runs/                     # Created at runtime (logs, local training outputs)
 ```
 
@@ -216,7 +222,9 @@ python scripts/live_inference_local.py
 
 ## Reproduce training (optional)
 
-See **[docs/training.md](docs/training.md)** for step-by-step commands and HF links.
+See **[docs/training.md](docs/training.md)** for Hugging Face downloads, training commands,
+and **[scripts/labelling/README.md](scripts/labelling/README.md)** for building
+`data/binary/`, `data/pose/`, and `data/temporal/` from raw `videos/`.
 
 ## Programmatic use
 
@@ -242,5 +250,6 @@ See `scripts/live_inference_local.py` for the full loop including BiGRU loading.
 Model weights and datasets are published under the **FatigueSense** Hugging Face
 organization. Use and redistribution follow each HF repo’s license card.
 
-For the full development repo (data extraction scripts, docs, backend), see the
-main FatigueSense project.
+Dataset preparation from in-house videos lives under `scripts/labelling/` in this
+repo. Additional design docs and backend work may exist in the upstream FatigueSense
+monorepo.

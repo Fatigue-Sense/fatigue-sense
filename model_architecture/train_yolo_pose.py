@@ -190,7 +190,9 @@ def main(argv: list[str] | None = None) -> None:
 
     if not DATA_YAML.exists():
         raise FileNotFoundError(
-            f"{DATA_YAML} not found - run scripts/pose/pseudo_label.py first."
+            f"{DATA_YAML} not found - run "
+            "python -m scripts.labelling.pose.pseudo_label first, or "
+            "scripts.download_hf_datasets --pose."
         )
 
     data_yaml = _materialize_dataset_yaml()

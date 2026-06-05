@@ -12,8 +12,8 @@ eye, and mouth from each sampled frame, and the crops are auto-labelled
 > same dataset published as
 > [`FatigueSense/binary_classifier_dataset`](https://huggingface.co/datasets/FatigueSense/binary_classifier_dataset)
 > on Hugging Face. If you only need the prepared dataset (not the raw videos),
-> download it directly via `scripts/download_hf_datasets.py` instead of running
-> this pipeline.
+> download it directly via `scripts.download_hf_datasets.py --binary` instead of
+> running this pipeline (see [docs/training.md](../../../docs/training.md)).
 
 ## Files
 
@@ -57,7 +57,7 @@ python -m scripts.labelling.cnn.label_dataset
 | Constant (`_defaults.py`) | Default | Meaning |
 |---------------------------|---------|---------|
 | `DEFAULT_VIDEOS_DIR` | `<repo>/videos` | Folder of input videos |
-| `DEFAULT_OUTPUT_ROOT` | `<repo>/dataset` | Where crops are written |
+| `DEFAULT_OUTPUT_ROOT` | `<repo>/data/binary/train` | Train-split crops (matches `train_binary_classifier.py`) |
 | `LANDMARKER_PATH` | `<repo>/face_landmarker.task` | MediaPipe model (via `scripts/weights_path.py`) |
 | `DEFAULT_SAMPLE_EVERY_N_FRAMES` | `15` | Process every 15th frame |
 | `DEFAULT_MAX_FRAMES` | `None` | Cap processed frames per video (None = all) |
@@ -105,8 +105,10 @@ Opens the webcam and shows the live eye/mouth crops. Press `q` or `Esc` to quit.
 
 ## Output layout
 
+Default `output_root` is `data/binary/train/` so crops land where training expects them:
+
 ```
-<output_root>/
+data/binary/train/
 ├── eyes/
 │   ├── open/      <video>_f000123_left.png, <video>_f000123_right.png ...
 │   └── closed/
@@ -115,6 +117,9 @@ Opens the webcam and shows the live eye/mouth crops. Press `q` or `Esc` to quit.
 │   └── closed/
 └── ear_log.csv    per-sample EAR values and eye states
 ```
+
+There is no automatic `test/` split. Use the HF dataset zip or copy a held-out subset
+into `data/binary/test/` with the same folder names.
 
 - Filenames are `<sanitized_video_stem>_f<frame_index>_{left,right,mouth}.png`,
   so samples are traceable back to the source video and frame.

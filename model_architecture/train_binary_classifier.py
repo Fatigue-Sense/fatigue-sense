@@ -274,7 +274,9 @@ def _resolve_dataset_root(roi: str) -> Path:
     if not root.is_dir():
         raise FileNotFoundError(
             f"Dataset root for '{roi}' not found: {root}\n"
-            f"Update DATASET_ROOTS['{roi}'] or place crops under "
+            f"Update DATASET_ROOTS['{roi}'], run "
+            f"python -m scripts.labelling.cnn.label_dataset, download HF data "
+            f"(scripts.download_hf_datasets --binary), or place crops under "
             f"data/binary/train/{roi}/{{closed,open}}/"
         )
     return root

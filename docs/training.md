@@ -8,6 +8,18 @@
 
 Published **model weights**: [eye_classifier](https://huggingface.co/FatigueSense/eye_classifier), [mouth_classifier](https://huggingface.co/FatigueSense/mouth_classifier), [pose_model](https://huggingface.co/FatigueSense/pose_model), [temporal_model](https://huggingface.co/FatigueSense/temporal_model).
 
+You can either **download** the published datasets below or **build** them from raw
+`videos/` using [scripts/labelling/README.md](../scripts/labelling/README.md).
+
+| Target | Labelling guide | Output path |
+|--------|-----------------|-------------|
+| CNN eyes/mouth | [cnn/README.md](../scripts/labelling/cnn/README.md) | `data/binary/train/` |
+| Pose YOLO | [pose/README.md](../scripts/labelling/pose/README.md) | `data/pose/` + `dataset.yaml` |
+| Temporal features | [temporal/README.md](../scripts/labelling/temporal/README.md) | `data/temporal/features/` |
+
+Recommended build order: CNN (or HF binary zip) → pose → temporal (needs trained or HF
+eye/mouth/pose weights for Stage 1 extraction).
+
 ### Download datasets and expected layout
 
 Use [`scripts/download_hf_datasets.py`](../scripts/download_hf_datasets.py) from the repo root. It writes under `data/` in the shapes expected by each `train_*.py` script. Public HF repos need no token; for private mirrors set `HF_TOKEN` or run `hf auth login`.
@@ -59,6 +71,11 @@ data/binary/
 
 Class folder names must be lowercase `closed` and `open`. Training reads `data/binary/train/eyes` and `data/binary/train/mouth` unless you override `DATASET_ROOTS` in `train_binary_classifier.py`.
 
+To auto-label crops from videos instead of downloading the zip, run
+`python -m scripts.labelling.cnn.label_dataset` (writes under `data/binary/train/` by
+default). That produces a **train** tree only; add `data/binary/test/` manually or use
+the HF archive for a held-out split.
+
 Published weights (inference): [eye_classifier](https://huggingface.co/FatigueSense/eye_classifier), [mouth_classifier](https://huggingface.co/FatigueSense/mouth_classifier).
 
 #### 2. Pose (YOLO upper-body keypoints)
@@ -82,7 +99,10 @@ data/pose/
     └── val/
 ```
 
-Exact split names follow `dataset.yaml` on the Hub. Published weights: [pose_model](https://huggingface.co/FatigueSense/pose_model).
+Exact split names follow `dataset.yaml` on the Hub. To build from videos:
+`extract_frames` → `pseudo_label` (writes `dataset.yaml`); see
+[pose/README.md](../scripts/labelling/pose/README.md). Published weights:
+[pose_model](https://huggingface.co/FatigueSense/pose_model).
 
 #### 3. Temporal features (BiGRU focus model)
 
@@ -103,6 +123,10 @@ data/temporal/
 
 Published weights: [temporal_model](https://huggingface.co/FatigueSense/temporal_model).
 
+To build from videos: `extract_probs` → `aggregate_features`; see
+[temporal/README.md](../scripts/labelling/temporal/README.md). Window labels for
+training are bootstrapped inside `TemporalWindowDataset` (no separate label export).
+
 ## 1. Binary ROI classifiers (eyes and mouth)
 
 ```bash
@@ -118,7 +142,8 @@ Requires `data/binary/` as in the [layout section](#1-binary-roi-crops-eyes--mou
 python -m model_architecture.train_yolo_pose
 ```
 
-Requires `data/pose/dataset.yaml` - see [pose layout](#2-pose-yolo-upper-body-keypoints).
+Requires `data/pose/dataset.yaml` - see [pose layout](#2-pose-yolo-upper-body-keypoints) or
+`python -m scripts.labelling.pose.pseudo_label`.
 
 Per-run outputs under `runs/pose/<run_name>/` (default run name `yolo11n_pose_upper5`):
 
@@ -150,9 +175,9 @@ with dropout, feature noise, gradient clipping, and stronger weight decay (see
 HF weights; ship `model_config.json` with new checkpoints or point inference at
 `runs/temporal/`.
 
-To **build** feature Parquets from raw video (not in this minimal release), use the
-main FatigueSense dev repo: per-frame prob extraction, then 1 Hz aggregation, then
-this training step.
+To **build** feature Parquets from raw video, use
+[scripts/labelling/temporal](../scripts/labelling/temporal/README.md) (`extract_probs`,
+then `aggregate_features`), then run this training step.
 
 ## Manual download (optional)
 
