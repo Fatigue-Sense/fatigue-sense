@@ -9,19 +9,18 @@ import mediapipe as mp
 import numpy as np
 from mediapipe.tasks.python import vision
 
-
-LEFT_EYE = [33,  133, 160, 144, 158, 153, 159, 145]
-RIGHT_EYE = [362, 263, 387, 373, 385, 380, 386, 374]
-MOUTH = [61, 291, 81, 178, 13, 14, 402, 311]
-
-EAR_OPEN_THRESH = 0.13
-EAR_CLOSE_THRESH = 0.10
-
-MAR_OPEN_THRESH = 0.43
-MAR_CLOSE_THRESH = 0.40
-
-CROP_HEIGHT = 64
-CROP_WIDTH = 64
+from scripts.labelling.cnn._defaults import (
+    CROP_HEIGHT,
+    CROP_WIDTH,
+    EAR_CLOSE_THRESH,
+    EAR_OPEN_THRESH,
+    LEFT_EYE,
+    MAR_CLOSE_THRESH,
+    MAR_OPEN_THRESH,
+    MOUTH,
+    RIGHT_EYE,
+    resolve_landmarker_path,
+)
 
 
 @dataclass
@@ -265,7 +264,7 @@ class MediaPipeRegionExtractor:
 
 
 if __name__ == "__main__":
-    MODEL_PATH = Path(__file__).resolve().parents[3] / "face_landmarker.task"
+    MODEL_PATH = resolve_landmarker_path()
     if not MODEL_PATH.exists():
         print(f"Update MODEL_PATH in __main__ test block. Missing: {MODEL_PATH}")
         raise SystemExit(1)

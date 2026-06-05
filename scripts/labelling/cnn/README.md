@@ -19,6 +19,7 @@ eye, and mouth from each sampled frame, and the crops are auto-labelled
 
 | File | Role |
 |------|------|
+| `_defaults.py` | Repo-root paths, landmarker path, EAR/MAR thresholds, crop size, batch sampling defaults |
 | `mediapipe_labelling.py` | `MediaPipeRegionExtractor` — detects landmarks, computes EAR/MAR, returns eye/mouth crops + states for one frame. Run directly for a live webcam preview. |
 | `label_dataset.py` | Walks a folder of videos, runs the extractor frame by frame, and writes the labelled crop dataset to disk. |
 
@@ -28,73 +29,76 @@ For every sampled frame the extractor:
 
 1. Detects one face with MediaPipe `FaceLandmarker` (video mode).
 2. Computes **EAR** per eye and **MAR** for the mouth from fixed landmark sets.
-3. Assigns a state using hysteresis thresholds (see `mediapipe_labelling.py`):
-   - Eye: `CLOSED` if `EAR <= 0.10`, `OPEN` if `EAR >= 0.13`, otherwise **ambiguous → frame skipped**.
-   - Mouth: `OPEN` if `MAR > 0.43`, `CLOSED` if `MAR < 0.40` (last state held in between).
-4. Crops each region to **64×64** and saves it into the matching class folder.
+3. Assigns a state using hysteresis thresholds (see `_defaults.py`):
+   - Eye: `CLOSED` if `EAR <= EAR_CLOSE_THRESH`, `OPEN` if `EAR >= EAR_OPEN_THRESH`, otherwise **ambiguous → frame skipped**.
+   - Mouth: `OPEN` if `MAR > MAR_OPEN_THRESH`, `CLOSED` if `MAR < MAR_CLOSE_THRESH` (last state held in between).
+4. Crops each region to **64×64** (`CROP_WIDTH` × `CROP_HEIGHT`) and saves it into the matching class folder.
 
 Frames are skipped (and counted in the stats) when no face is detected, an eye
 state is ambiguous, or any crop is missing.
 
 ## Prerequisites
 
+- Run from the **repository root** (same as `temporal/` and `pose/`).
 - Python deps: `opencv-python`, `mediapipe`, `numpy`.
-- The MediaPipe model file `face_landmarker.task` (it lives at the
-  **repo root** of `fatigue-sense`).
-- A folder of input videos. Supported extensions: `.mp4 .avi .mov .mkv .webm .m4v`.
+- `face_landmarker.task` at the repo root (see main [`README.md`](../../../README.md)).
+- Input videos in `videos/` (or pass paths in your own script).
 
 ## Running
 
-### Option A — batch a folder of videos (the `__main__` defaults)
+### Option A — batch all videos (`label_dataset.py`)
 
-Edit the constants at the bottom of `label_dataset.py`, then run it from the
-folder that contains your `videos/` directory and the model file:
+Uses defaults from `_defaults.py`:
 
 ```powershell
-python scripts/labelling/cnn/label_dataset.py
+python -m scripts.labelling.cnn.label_dataset
 ```
 
-Defaults in `__main__`:
-
-| Constant | Default | Meaning |
-|----------|---------|---------|
-| `VIDEOS_DIR` | `videos` | Folder of input videos |
-| `OUTPUT_ROOT` | `dataset` | Where crops are written |
-| `MODEL_PATH` | `face_landmarker.task` | MediaPipe model |
-| `sample_every_n_frames` | `15` | Process every 15th frame |
-| `max_frames` | `None` | Cap processed frames per video (None = all) |
-| `flip_horizontal` | `False` | Mirror frames before cropping |
+| Constant (`_defaults.py`) | Default | Meaning |
+|---------------------------|---------|---------|
+| `DEFAULT_VIDEOS_DIR` | `<repo>/videos` | Folder of input videos |
+| `DEFAULT_OUTPUT_ROOT` | `<repo>/dataset` | Where crops are written |
+| `LANDMARKER_PATH` | `<repo>/face_landmarker.task` | MediaPipe model (via `scripts/weights_path.py`) |
+| `DEFAULT_SAMPLE_EVERY_N_FRAMES` | `15` | Process every 15th frame |
+| `DEFAULT_MAX_FRAMES` | `None` | Cap processed frames per video (None = all) |
+| `DEFAULT_FLIP_HORIZONTAL` | `False` | Mirror frames before cropping |
 
 ### Option B — call from your own script
 
 ```python
+from scripts.labelling.cnn._defaults import (
+    DEFAULT_OUTPUT_ROOT,
+    DEFAULT_SAMPLE_EVERY_N_FRAMES,
+    DEFAULT_VIDEOS_DIR,
+    resolve_landmarker_path,
+)
 from scripts.labelling.cnn.label_dataset import (
     process_video_to_region_dataset,
     process_videos_in_directory,
 )
 
+model_path = resolve_landmarker_path()
+
 # Single video
 stats = process_video_to_region_dataset(
-    video_path="videos/clip01.mp4",
-    model_path="face_landmarker.task",
-    output_root="dataset",
-    sample_every_n_frames=15,
-    max_frames=None,
-    flip_horizontal=False,
+    video_path=DEFAULT_VIDEOS_DIR / "clip01.mp4",
+    model_path=model_path,
+    output_root=DEFAULT_OUTPUT_ROOT,
+    sample_every_n_frames=DEFAULT_SAMPLE_EVERY_N_FRAMES,
 )
 
 # Whole directory
 all_stats = process_videos_in_directory(
-    videos_dir="videos",
-    model_path="face_landmarker.task",
-    output_root="dataset",
+    videos_dir=DEFAULT_VIDEOS_DIR,
+    model_path=model_path,
+    output_root=DEFAULT_OUTPUT_ROOT,
 )
 ```
 
 ### Preview the extractor live (sanity check)
 
 ```powershell
-python scripts/labelling/cnn/mediapipe_labelling.py
+python -m scripts.labelling.cnn.mediapipe_labelling
 ```
 
 Opens the webcam and shows the live eye/mouth crops. Press `q` or `Esc` to quit.
@@ -121,8 +125,8 @@ Opens the webcam and shows the live eye/mouth crops. Press `q` or `Esc` to quit.
 ## Tuning tips
 
 - **Too few / too many samples:** adjust `sample_every_n_frames`.
-- **Mislabelled eyes/mouth:** tune the `EAR_*` / `MAR_*` thresholds in
-  `mediapipe_labelling.py`. Lighting and camera angle shift EAR/MAR, so verify a
-  handful of saved crops per class before training.
+- **Mislabelled eyes/mouth:** tune `EAR_*` / `MAR_*` in `_defaults.py`. Lighting
+  and camera angle shift EAR/MAR, so verify a handful of saved crops per class
+  before training.
 - **Class imbalance:** check the printed per-video stats (`eyes_open`,
   `eyes_closed`, `mouth_open`, `mouth_closed`) to see how balanced the dataset is.

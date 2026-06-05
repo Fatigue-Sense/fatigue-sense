@@ -5,10 +5,16 @@ from typing import Optional
 import cv2
 import csv
 
-from mediapipe_labelling import MediaPipeRegionExtractor
-
-
-VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
+from scripts.labelling.cnn._defaults import (
+    DEFAULT_FLIP_HORIZONTAL,
+    DEFAULT_MAX_FRAMES,
+    DEFAULT_OUTPUT_ROOT,
+    DEFAULT_SAMPLE_EVERY_N_FRAMES,
+    DEFAULT_VIDEOS_DIR,
+    VIDEO_EXTENSIONS,
+    resolve_landmarker_path,
+)
+from scripts.labelling.cnn.mediapipe_labelling import MediaPipeRegionExtractor
 
 
 def sanitize_stem(path: Path) -> str:
@@ -248,22 +254,19 @@ def process_videos_in_directory(
 
 
 if __name__ == "__main__":
-    MODEL_PATH = Path("face_landmarker.task")
-    VIDEOS_DIR = Path("videos")
-    OUTPUT_ROOT = Path("dataset")
-
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Missing model file: {MODEL_PATH}")
-    if not VIDEOS_DIR.exists():
-        raise FileNotFoundError(f"Missing videos directory: {VIDEOS_DIR}")
+    model_path = resolve_landmarker_path()
+    if not model_path.exists():
+        raise FileNotFoundError(f"Missing model file: {model_path}")
+    if not DEFAULT_VIDEOS_DIR.exists():
+        raise FileNotFoundError(f"Missing videos directory: {DEFAULT_VIDEOS_DIR}")
 
     all_results = process_videos_in_directory(
-        videos_dir=VIDEOS_DIR,
-        model_path=MODEL_PATH,
-        output_root=OUTPUT_ROOT,
-        sample_every_n_frames=15,
-        max_frames=None,
-        flip_horizontal=False,
+        videos_dir=DEFAULT_VIDEOS_DIR,
+        model_path=model_path,
+        output_root=DEFAULT_OUTPUT_ROOT,
+        sample_every_n_frames=DEFAULT_SAMPLE_EVERY_N_FRAMES,
+        max_frames=DEFAULT_MAX_FRAMES,
+        flip_horizontal=DEFAULT_FLIP_HORIZONTAL,
     )
 
     print("\nAll videos done.")
